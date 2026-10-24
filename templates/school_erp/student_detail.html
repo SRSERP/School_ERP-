@@ -1,0 +1,454 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Student Forma - {{ student.full_name }} ({{ student.admission_number }}){% endblock %}
+{% block page_title %}Student Admission Dossier & Bio-Data Forma{% endblock %}
+
+{% block header_actions %}
+<div class="btn-no-print" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+  <button type="button" onclick="window.print()" class="btn btn-primary btn-sm" style="background:#0f172a; border-color:#0f172a; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-print"></i> 🖨️ Print Official Forma
+  </button>
+  <a href="{% url 'student_promote' student.pk %}" class="btn btn-primary btn-sm" style="background:#7c3aed; border-color:#7c3aed; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-graduation-cap"></i> Move to Next Session
+  </a>
+  <a href="{% url 'student_id_card' student.pk %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+    <i class="fa-solid fa-id-badge"></i> Print ID Card
+  </a>
+  <a href="{% url 'fee_counter' %}?student_id={{ student.id }}" class="btn btn-primary btn-sm" style="background:#059669; border-color:#059669; font-weight:700;">
+    <i class="fa-solid fa-cash-register"></i> Fee Counter
+  </a>
+  <a href="{% url 'student_edit' student.pk %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+    <i class="fa-solid fa-pen-to-square"></i> Edit Profile
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1050px; margin:0 auto;">
+
+  <!-- ======================================================== -->
+  <!-- OFFICIAL STUDENT ADMISSION DOSSIER / BIO-DATA FORMA      -->
+  <!-- ======================================================== -->
+  <div id="printableStudentForma" class="official-student-forma" style="background:#ffffff; border:2px solid #0f172a; border-radius:8px; padding:1.75rem 2rem; margin-bottom:2rem; box-shadow:0 6px 20px rgba(0,0,0,0.06); position:relative;">
+    
+    <!-- Top School Masthead / Header -->
+    <div style="border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start; gap:14px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <div style="width:68px; height:68px; border-radius:10px; background:#0f172a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:2rem; font-weight:900; letter-spacing:1px; flex-shrink:0;">
+          SRS
+        </div>
+        <div>
+          <h1 style="font-size:1.45rem; font-weight:900; color:#0f172a; margin:0 0 2px 0; text-transform:uppercase; letter-spacing:0.5px; line-height:1.2;">
+            {{ school.name }}
+          </h1>
+          <div style="font-size:0.75rem; color:#334155; font-weight:600; line-height:1.4;">
+            Affiliated to CBSE, New Delhi • Affil No: <strong>{{ school.affiliation_number }}</strong> • School Code: <strong>{{ school.school_code }}</strong>
+          </div>
+          <div style="font-size:0.72rem; color:#64748b; line-height:1.4;">
+            {{ school.address }} • Ph: {{ school.phone }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Header Badge -->
+      <div style="text-align:right; flex-shrink:0;">
+        <div style="border:1.5px solid #0f172a; border-radius:6px; padding:4px 10px; background:#f8fafc; text-align:center;">
+          <span style="font-size:0.7rem; font-weight:800; color:#475569; text-transform:uppercase; display:block;">Academic Session</span>
+          <strong style="font-size:0.95rem; color:#0f172a;">{{ school.academic_year }}</strong>
+        </div>
+        <div style="font-size:0.72rem; color:#64748b; margin-top:4px; font-weight:600;">
+          Official Student Dossier
+        </div>
+      </div>
+    </div>
+
+    <!-- Document Title & Photo Row -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px;">
+      
+      <div style="flex:1;">
+        <div style="display:inline-block; background:#0f172a; color:#fff; font-size:0.85rem; font-weight:800; padding:4px 12px; border-radius:4px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+          Student Admission & Bio-Data Record
+        </div>
+        <div style="font-size:0.82rem; color:#475569;">
+          Permanent Record Number: <strong style="color:#0f172a;">{{ student.admission_number }}</strong> • 
+          Date of Admission: <strong style="color:#0f172a;">{{ student.admission_date|date:"d F Y" }}</strong>
+        </div>
+        <div style="margin-top:6px; display:flex; gap:8px; align-items:center;">
+          <span class="badge" style="background:#dcfce7; color:#166534; font-weight:800; font-size:0.78rem;">
+            ● Active Enrolled Student
+          </span>
+          <span style="font-size:0.75rem; color:#64748b; font-weight:600;">
+            Class: <strong style="color:#0f172a;">{{ student.class_level.name }} - Section {{ student.section.name }}</strong> (Roll #{{ student.roll_number }})
+          </span>
+        </div>
+      </div>
+
+      <!-- Dual Photographs (Student & Parent) -->
+      <div style="display:flex; gap:12px; flex-shrink:0;">
+        
+        <!-- Student Photo -->
+        <div style="text-align:center;">
+          <div style="width:90px; height:110px; border:1.5px solid #0f172a; background:#ffffff; border-radius:4px; display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.06);">
+            {% if student.student_photo %}
+            <img src="{{ student.student_photo.url }}" alt="{{ student.full_name }}" style="width:100%; height:100%; object-fit:cover;">
+            {% else %}
+            <div style="text-align:center; padding:4px;">
+              <i class="fa-solid fa-user" style="font-size:2rem; color:#cbd5e1; margin-bottom:4px; display:block;"></i>
+              <span style="font-size:0.6rem; color:#94a3b8; line-height:1; display:block; font-weight:700;">Student Photo</span>
+            </div>
+            {% endif %}
+          </div>
+          <span style="font-size:0.68rem; font-weight:700; color:#334155; margin-top:3px; display:block;">Student</span>
+        </div>
+
+        <!-- Parent Photo -->
+        <div style="text-align:center;">
+          <div style="width:90px; height:110px; border:1.5px solid #0f172a; background:#ffffff; border-radius:4px; display:flex; align-items:center; justify-content:center; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.06);">
+            {% if student.parent_photo %}
+            <img src="{{ student.parent_photo.url }}" alt="{{ student.parent_name }}" style="width:100%; height:100%; object-fit:cover;">
+            {% else %}
+            <div style="text-align:center; padding:4px;">
+              <i class="fa-solid fa-user-shield" style="font-size:2rem; color:#cbd5e1; margin-bottom:4px; display:block;"></i>
+              <span style="font-size:0.6rem; color:#94a3b8; line-height:1; display:block; font-weight:700;">Parent Photo</span>
+            </div>
+            {% endif %}
+          </div>
+          <span style="font-size:0.68rem; font-weight:700; color:#334155; margin-top:3px; display:block;">Parent/Guardian</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Section 1: Academic & Admission Particulars -->
+    <div style="margin-bottom:12px;">
+      <div style="background:#0f172a; color:#fff; font-size:0.8rem; font-weight:800; padding:4px 10px; text-transform:uppercase; letter-spacing:0.5px; border-radius:4px 4px 0 0;">
+        1. Academic & Admission Particulars
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid #cbd5e1;">
+        <tbody>
+          <tr>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Admission No:</td>
+            <td style="width:30%; padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">{{ student.admission_number }}</td>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Class & Section:</td>
+            <td style="width:30%; padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">{{ student.class_level.name }} - {{ student.section.name }}</td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Class Roll Number:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">#{{ student.roll_number }}</td>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Class Teacher:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a;">{{ student.section.class_teacher.full_name|default:"Unassigned" }}</td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Admission Date:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a;">{{ student.admission_date|date:"d F Y" }}</td>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Class Room No:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a;">{{ student.section.room_number|default:"Room 101" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 2: Student Personal Profile & Aadhaar -->
+    <div style="margin-bottom:12px;">
+      <div style="background:#0f172a; color:#fff; font-size:0.8rem; font-weight:800; padding:4px 10px; text-transform:uppercase; letter-spacing:0.5px; border-radius:4px 4px 0 0;">
+        2. Student Personal Information & Aadhaar
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid #cbd5e1;">
+        <tbody>
+          <tr>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Student Full Name:</td>
+            <td style="width:30%; padding:5px 8px; border:1px solid #cbd5e1; font-weight:900; color:#0f172a; font-size:0.9rem;">{{ student.full_name|upper }}</td>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Gender:</td>
+            <td style="width:30%; padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a; font-weight:700;">{{ student.gender }}</td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Date of Birth (DOB):</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">{{ student.dob|date:"d F Y" }}</td>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Blood Group:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#991b1b;">{{ student.blood_group }}</td>
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td style="background:#e2fbe8; font-weight:800; color:#166534; padding:6px 8px; border:1px solid #cbd5e1;">
+              <i class="fa-solid fa-id-card"></i> Student Aadhaar Card:
+            </td>
+            <td colspan="3" style="padding:6px 8px; border:1px solid #cbd5e1; font-weight:900; color:#166534; font-size:0.9rem; letter-spacing:1px;">
+              {% if student.student_aadhaar %}
+                {{ student.student_aadhaar }} <span style="font-size:0.7rem; font-weight:600; color:#059669; margin-left:8px;">(Verified)</span>
+              {% else %}
+                <span style="color:#94a3b8; font-weight:600; font-size:0.78rem;">Not Provided (Optional)</span>
+              {% endif %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 3: Parent / Guardian & Family Background -->
+    <div style="margin-bottom:12px;">
+      <div style="background:#0f172a; color:#fff; font-size:0.8rem; font-weight:800; padding:4px 10px; text-transform:uppercase; letter-spacing:0.5px; border-radius:4px 4px 0 0;">
+        3. Parents / Guardian & Family Details
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid #cbd5e1;">
+        <tbody>
+          <tr>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Father / Guardian Name:</td>
+            <td style="width:30%; padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">{{ student.parent_name }}</td>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Relationship:</td>
+            <td style="width:30%; padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a;">{{ student.parent_relation }}</td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Contact Mobile No:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">
+              <i class="fa-solid fa-phone" style="font-size:0.7rem; color:#64748b;"></i> {{ student.parent_phone }}
+            </td>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Occupation / Profession:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a;">{{ student.parent_occupation }}</td>
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td style="background:#e2fbe8; font-weight:800; color:#166534; padding:6px 8px; border:1px solid #cbd5e1;">
+              <i class="fa-solid fa-id-card"></i> Parent Aadhaar Card:
+            </td>
+            <td style="padding:6px 8px; border:1px solid #cbd5e1; font-weight:900; color:#166534; font-size:0.9rem; letter-spacing:1px;">
+              {% if student.parent_aadhaar %}
+                {{ student.parent_aadhaar }} <span style="font-size:0.7rem; font-weight:600; color:#059669; margin-left:4px;">(Verified)</span>
+              {% else %}
+                <span style="color:#94a3b8; font-weight:600; font-size:0.78rem;">Not Provided (Optional)</span>
+              {% endif %}
+            </td>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Parent Email:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; color:#0f172a;">{{ student.parent_email|default:"N/A" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 4: Residential Address & Emergency Details -->
+    <div style="margin-bottom:12px;">
+      <div style="background:#0f172a; color:#fff; font-size:0.8rem; font-weight:800; padding:4px 10px; text-transform:uppercase; letter-spacing:0.5px; border-radius:4px 4px 0 0;">
+        4. Residential Address & Emergency Contacts
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid #cbd5e1;">
+        <tbody>
+          <tr>
+            <td style="width:20%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Full Residential Address:</td>
+            <td colspan="3" style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:700; color:#0f172a;">{{ student.address }}</td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Emergency Contact No:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#0f172a;">{{ student.emergency_contact|default:student.parent_phone }}</td>
+            <td style="background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1;">Attendance Status:</td>
+            <td style="padding:5px 8px; border:1px solid #cbd5e1; font-weight:800; color:#2563eb;">{{ student.attendance_stats.percentage }}% Overall Attendance</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 5: Current Accounts & Fee Status -->
+    <div style="margin-bottom:16px;">
+      <div style="background:#0f172a; color:#fff; font-size:0.8rem; font-weight:800; padding:4px 10px; text-transform:uppercase; letter-spacing:0.5px; border-radius:4px 4px 0 0;">
+        5. Fee Accounts Summary
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; border:1px solid #cbd5e1;">
+        <tbody>
+          <tr>
+            <td style="width:25%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1; text-align:center;">
+              Total Invoiced: <strong style="color:#0f172a; display:block; font-size:0.95rem;">{{ school.currency_symbol }}{{ student.fee_due_amount|default:"0" }}</strong>
+            </td>
+            <td style="width:25%; background:#f0fdf4; font-weight:700; color:#166534; padding:5px 8px; border:1px solid #cbd5e1; text-align:center;">
+              Paid Status: <strong style="color:#166534; display:block; font-size:0.95rem;">Active Records</strong>
+            </td>
+            <td style="width:25%; background:#fef2f2; font-weight:700; color:#991b1b; padding:5px 8px; border:1px solid #cbd5e1; text-align:center;">
+              Current Balance Due: <strong style="color:#991b1b; display:block; font-size:0.95rem;">{{ school.currency_symbol }}{{ student.fee_due_amount|floatformat:0 }}</strong>
+            </td>
+            <td style="width:25%; background:#f8fafc; font-weight:700; color:#475569; padding:5px 8px; border:1px solid #cbd5e1; text-align:center;">
+              Monthly Standard Rate: <strong style="color:#0f172a; display:block; font-size:0.95rem;">{{ school.currency_symbol }}{{ student.class_level.fee_master.monthly_tuition_fee|default:"2000" }}/mo</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Section 6: Official Verification & Signatures -->
+    <div style="margin-top:20px; border-top:1px dashed #0f172a; padding-top:14px;">
+      <p style="font-size:0.72rem; color:#475569; margin:0 0 24px 0; font-style:italic;">
+        <strong>Declaration:</strong> I hereby certify that the information provided in this admission dossier is true and correct to the best of my knowledge. We agree to abide by the rules, code of conduct, and fee regulations of {{ school.name }}.
+      </p>
+
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; text-align:center;">
+        <div>
+          <div style="height:36px;"></div>
+          <div style="border-top:1px solid #0f172a; font-size:0.72rem; font-weight:700; color:#0f172a; padding-top:4px;">
+            Student Signature
+          </div>
+        </div>
+
+        <div>
+          <div style="height:36px;"></div>
+          <div style="border-top:1px solid #0f172a; font-size:0.72rem; font-weight:700; color:#0f172a; padding-top:4px;">
+            Parent / Guardian
+          </div>
+        </div>
+
+        <div>
+          <div style="height:36px;"></div>
+          <div style="border-top:1px solid #0f172a; font-size:0.72rem; font-weight:700; color:#0f172a; padding-top:4px;">
+            Class Teacher
+          </div>
+        </div>
+
+        <div>
+          <div style="height:22px; font-family:'Brush Script MT', cursive; font-size:1.1rem; color:#0f172a; font-weight:800;">
+            {{ school.principal_name }}
+          </div>
+          <div style="border-top:1px solid #0f172a; font-size:0.72rem; font-weight:800; color:#0f172a; padding-top:4px;">
+            Principal / Official Seal
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ======================================================== -->
+  <!-- TABBED ACADEMIC LEDGER & EXAM PERFORMANCE (Screen Only)  -->
+  <!-- ======================================================== -->
+  <div class="btn-no-print">
+    
+    <!-- Fee Invoices & Records -->
+    <div class="card-panel" style="margin-bottom:1.5rem;">
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <h3><i class="fa-solid fa-receipt" style="color:var(--success);"></i> Fee Invoices & Payment Ledger</h3>
+        <a href="{% url 'fee_counter' %}?student_id={{ student.id }}" class="btn btn-sm btn-primary" style="background:#059669; border-color:#059669;">
+          <i class="fa-solid fa-cash-register"></i> Collect Fee Now
+        </a>
+      </div>
+      <div class="table-responsive">
+        <table class="custom-table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th class="freeze-action-col" style="text-align:center; min-width:110px;">Action</th>
+              <th>Invoice #</th>
+              <th>Fee Category</th>
+              <th>Total Amount</th>
+              <th>Paid Amount</th>
+              <th>Remaining Due</th>
+              <th>Due Date</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for inv in invoices %}
+            <tr>
+              <td class="freeze-action-col" style="text-align:center;">
+                {% if inv.remaining_due > 0 %}
+                <a href="{% url 'fee_collect' inv.id %}" class="btn btn-primary btn-sm" style="padding:4px 8px; font-size:0.75rem;"><i class="fa-solid fa-indian-rupee-sign"></i> Pay</a>
+                {% else %}
+                {% with p=inv.payments.first %}
+                  {% if p %}
+                  <a href="{% url 'fee_receipt' p.id %}" class="btn btn-outline btn-sm" style="padding:4px 8px; font-size:0.75rem;"><i class="fa-solid fa-print"></i> Slip</a>
+                  {% endif %}
+                {% endwith %}
+                {% endif %}
+              </td>
+              <td><strong>{{ inv.invoice_number }}</strong></td>
+              <td>{{ inv.fee_category.name }}</td>
+              <td>{{ school.currency_symbol }}{{ inv.total_payable|floatformat:0 }}</td>
+              <td style="color:#065f46; font-weight:700;">{{ school.currency_symbol }}{{ inv.total_paid|floatformat:0 }}</td>
+              <td style="color:#991b1b; font-weight:700;">{{ school.currency_symbol }}{{ inv.remaining_due|floatformat:0 }}</td>
+              <td>{{ inv.due_date|date:"d M Y" }}</td>
+              <td>
+                {% if inv.status == 'Paid' %}<span class="badge badge-paid">Paid</span>
+                {% elif inv.status == 'Partially Paid' %}<span class="badge badge-partial">Partially Paid</span>
+                {% else %}<span class="badge badge-unpaid">{{ inv.status }}</span>{% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" style="text-align:center; padding:1.5rem; color:#94a3b8;">No fee records found for this student.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Examination Results & Marksheets -->
+    <div class="card-panel">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-award" style="color:var(--warning);"></i> Academic Performance & Report Cards</h3>
+      </div>
+      <div class="table-responsive">
+        <table class="custom-table" style="font-size:13px;">
+          <thead>
+            <tr>
+              <th>Examination</th>
+              <th>Subject</th>
+              <th>Marks Scored</th>
+              <th>Maximum Marks</th>
+              <th>Grade</th>
+              <th>Teacher Remarks</th>
+              <th>Report Card</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in exam_results %}
+            <tr>
+              <td><strong>{{ r.exam.name }}</strong></td>
+              <td>{{ r.subject.name }}</td>
+              <td><strong style="color:var(--primary); font-size:1.05rem;">{{ r.marks_obtained }}</strong></td>
+              <td>{{ r.max_marks }}</td>
+              <td><span class="badge badge-paid" style="font-size:0.85rem;">{{ r.grade }}</span></td>
+              <td>{{ r.remarks }}</td>
+              <td>
+                <a href="{% url 'report_card' student.id r.exam.id %}" class="btn btn-outline btn-sm" target="_blank">
+                  <i class="fa-solid fa-file-pdf"></i> View Marksheet
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" style="text-align:center; padding:1.5rem; color:#94a3b8;">No examination results entered yet.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- CSS for Print / Forma -->
+<style>
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm !important;
+  }
+  body, html {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .sidebar, .topbar, .btn-no-print, .alert-box, .messages-box, footer {
+    display: none !important;
+  }
+  .app-container, .main-content, .content-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .official-student-forma {
+    border: 1.5px solid #000 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 12px 14px !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}
+</style>
+{% endblock %}

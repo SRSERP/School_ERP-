@@ -1,0 +1,816 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Class & Section Master{% endblock %}
+{% block page_title %}Class & Section Master{% endblock %}
+
+{% block header_actions %}
+{# Kept empty so the topbar remains clean, uncluttered, and mobile-friendly #}
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1300px; margin:0 auto;">
+
+  <!-- Quick KPI Stats Bar -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap:1rem; margin-bottom:1.5rem;">
+    <div style="background:#ffffff; border-radius:12px; padding:1.15rem 1.25rem; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.04); display:flex; align-items:center; gap:1rem;">
+      <div style="width:48px; height:48px; border-radius:10px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+        <i class="fa-solid fa-school"></i>
+      </div>
+      <div>
+        <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Total Classes</div>
+        <div style="font-size:1.6rem; font-weight:800; color:#0f172a; line-height:1.2;">{{ total_classes }}</div>
+      </div>
+    </div>
+
+    <div style="background:#ffffff; border-radius:12px; padding:1.15rem 1.25rem; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.04); display:flex; align-items:center; gap:1rem;">
+      <div style="width:48px; height:48px; border-radius:10px; background:#ecfdf5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+        <i class="fa-solid fa-cubes-stacked"></i>
+      </div>
+      <div>
+        <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Active Sections</div>
+        <div style="font-size:1.6rem; font-weight:800; color:#0f172a; line-height:1.2;">{{ total_sections }}</div>
+      </div>
+    </div>
+
+    <div style="background:#ffffff; border-radius:12px; padding:1.15rem 1.25rem; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.04); display:flex; align-items:center; gap:1rem;">
+      <div style="width:48px; height:48px; border-radius:10px; background:#f5f3ff; color:#7c3aed; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+        <i class="fa-solid fa-user-graduate"></i>
+      </div>
+      <div>
+        <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Enrolled Students</div>
+        <div style="font-size:1.6rem; font-weight:800; color:#0f172a; line-height:1.2;">{{ total_students }}</div>
+      </div>
+    </div>
+
+    <div style="background:#ffffff; border-radius:12px; padding:1.15rem 1.25rem; border:1px solid #e2e8f0; box-shadow:0 2px 6px rgba(0,0,0,0.04); display:flex; align-items:center; gap:1rem;">
+      <div style="width:48px; height:48px; border-radius:10px; background:#fef3c7; color:#d97706; display:flex; align-items:center; justify-content:center; font-size:1.4rem;">
+        <i class="fa-solid fa-users-line"></i>
+      </div>
+      <div>
+        <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px;">Total Seat Capacity</div>
+        <div style="font-size:1.6rem; font-weight:800; color:#0f172a; line-height:1.2;">{{ total_capacity }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Primary Action Toolbar -->
+  <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:1rem 1.25rem; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+    <!-- Action Buttons -->
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      <button type="button" onclick="openAddClassModal()" class="btn btn-primary btn-sm" style="background:#2563eb; border-color:#2563eb; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:8px 14px;">
+        <i class="fa-solid fa-plus-circle"></i> + Add New Class
+      </button>
+      <button type="button" onclick="openBulkClassModal()" class="btn btn-primary btn-sm" style="background:#7c3aed; border-color:#7c3aed; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:8px 14px;">
+        <i class="fa-solid fa-layer-group"></i> Batch Add Classes
+      </button>
+      <button type="button" onclick="openAddSectionModal()" class="btn btn-primary btn-sm" style="background:#059669; border-color:#059669; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:8px 14px;">
+        <i class="fa-solid fa-shapes"></i> + Add Section
+      </button>
+      <a href="{% url 'class_fee_master' %}" class="btn btn-outline btn-sm" style="font-weight:600; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; color:#475569; border-color:#cbd5e1; text-decoration:none;">
+        <i class="fa-solid fa-receipt" style="color:#059669;"></i> Fee Master
+      </a>
+      <form method="POST" action="{% url 'classes' %}" style="display:inline; margin:0;" onsubmit="return confirm('Do you want to automatically re-order all classes in standard chronological order (Nursery, Class 1 to 12)?');">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="auto_sort_classes">
+        <button type="submit" class="btn btn-outline btn-sm" style="font-weight:600; display:inline-flex; align-items:center; gap:6px; padding:8px 14px; color:#2563eb; border-color:#bfdbfe; background:#eff6ff; cursor:pointer;" title="Auto reorder classes chronologically (Nursery, Class 1, 6..12)">
+          <i class="fa-solid fa-arrow-down-1-9"></i> Order by Class
+        </button>
+      </form>
+    </div>
+
+    <!-- View Modes & Quick Search -->
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="position:relative; min-width:240px;">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:0.85rem;"></i>
+        <input type="text" id="classSearchInput" onkeyup="filterClasses()" placeholder="Search class, section, teacher..." class="form-input" style="padding-left:34px; border-radius:8px; height:36px; margin:0; font-size:0.85rem;">
+      </div>
+
+      <div style="display:flex; align-items:center; gap:4px; background:#f1f5f9; padding:3px; border-radius:8px; border:1px solid #e2e8f0;">
+        <button type="button" id="btnGridView" onclick="switchView('grid')" title="Grid View" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:0.85rem; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
+          <i class="fa-solid fa-table-cells-large"></i> Grid
+        </button>
+        <button type="button" id="btnTableView" onclick="switchView('table')" title="Table View" style="background:transparent; color:#64748b; border:none; border-radius:6px; padding:6px 10px; cursor:pointer; font-size:0.85rem; font-weight:600; display:inline-flex; align-items:center; gap:4px;">
+          <i class="fa-solid fa-list"></i> Table
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEW 1: GRID CARDS VIEW -->
+  <div id="gridContainer" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap:1.25rem;">
+    {% for c in classes %}
+    <div class="class-card-item" data-search-text="{{ c.name|lower }} {{ c.code|lower }} {% for s in c.sections.all %}{{ s.name|lower }} {{ s.class_teacher.full_name|lower|default:'' }} {{ s.room_number|lower }} {% endfor %}" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:14px; box-shadow:0 4px 12px rgba(15,23,42,0.04); overflow:hidden; display:flex; flex-direction:column; transition:transform 0.2s, box-shadow 0.2s;">
+      
+      <!-- Card Header -->
+      <div style="background:linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%); padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+            <h3 style="font-size:1.2rem; font-weight:800; color:#0f172a; margin:0;">{{ c.name }}</h3>
+            <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:800; font-size:0.75rem; padding:2px 8px; border-radius:6px;">
+              {{ c.code }}
+            </span>
+          </div>
+          <span style="font-size:0.75rem; color:#64748b; font-weight:600;">
+            <i class="fa-solid fa-arrow-down-1-9"></i> Sort Order: #{{ c.order }} &bull; {{ c.sections.all|length }} Section(s)
+          </span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px;">
+          <!-- Edit Class Button -->
+          <button type="button" onclick="openEditClassModal('{{ c.id }}', '{{ c.name|escapejs }}', '{{ c.code|escapejs }}', '{{ c.order }}')" title="Edit Class" style="background:#f1f5f9; border:1px solid #cbd5e1; width:32px; height:32px; border-radius:6px; color:#334155; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+            <i class="fa-solid fa-pencil" style="font-size:0.85rem;"></i>
+          </button>
+          
+          <!-- Delete Class Button -->
+          <form method="POST" action="{% url 'classes' %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete class {{ c.name }}? (This class cannot be deleted if students are currently enrolled)');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_class">
+            <input type="hidden" name="class_id" value="{{ c.id }}">
+            <button type="submit" title="Delete Class" style="background:#fef2f2; border:1px solid #fecaca; width:32px; height:32px; border-radius:6px; color:#dc2626; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+              <i class="fa-regular fa-trash-can" style="font-size:0.85rem;"></i>
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Card Body: Sections -->
+      <div style="padding:1.1rem 1.25rem; flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <span style="font-size:0.78rem; font-weight:800; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">
+            <i class="fa-solid fa-cubes"></i> Sections & Faculty
+          </span>
+          <button type="button" onclick="openAddSectionModal('{{ c.id }}', '{{ c.name|escapejs }}')" style="background:#eff6ff; border:1px solid #bfdbfe; color:#2563eb; font-size:0.75rem; font-weight:700; border-radius:6px; padding:3px 8px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+            <i class="fa-solid fa-plus"></i> Add Section
+          </button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          {% for sec in c.sections.all %}
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; transition:border-color 0.2s;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+              <div>
+                <strong style="color:#1e3a8a; font-size:0.95rem;">Section {{ sec.name }}</strong>
+                <span style="font-size:0.72rem; background:#f1f5f9; color:#475569; border-radius:4px; padding:1px 6px; margin-left:6px; border:1px solid #e2e8f0;">
+                  <i class="fa-solid fa-door-open"></i> {{ sec.room_number }}
+                </span>
+              </div>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <!-- Edit Section -->
+                <button type="button" onclick="openEditSectionModal('{{ sec.id }}', '{{ c.name|escapejs }}', '{{ sec.name|escapejs }}', '{{ sec.room_number|escapejs }}', '{{ sec.capacity }}', '{{ sec.class_teacher.id|default:'' }}')" title="Edit Section" style="background:#fff; border:1px solid #cbd5e1; width:26px; height:26px; border-radius:4px; color:#475569; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+                  <i class="fa-solid fa-pen" style="font-size:0.72rem;"></i>
+                </button>
+                <!-- Delete Section -->
+                <form method="POST" action="{% url 'classes' %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete Section {{ sec.name }}?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_section">
+                  <input type="hidden" name="section_id" value="{{ sec.id }}">
+                  <button type="submit" title="Delete Section" style="background:#fff; border:1px solid #fecaca; width:26px; height:26px; border-radius:4px; color:#dc2626; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+                    <i class="fa-solid fa-xmark" style="font-size:0.8rem;"></i>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:#64748b; margin-top:2px;">
+              <div>
+                <i class="fa-solid fa-chalkboard-user" style="color:#2563eb;"></i> 
+                CT: <strong style="color:#1e293b;">{{ sec.class_teacher.full_name|default:"Unassigned" }}</strong>
+              </div>
+              <div>
+                <span class="badge" style="background:#dcfce7; color:#166534; font-weight:700; font-size:0.72rem;">
+                  {{ sec.student_count }} / {{ sec.capacity }} Seats
+                </span>
+              </div>
+            </div>
+          </div>
+          {% empty %}
+          <div style="background:#fef2f2; border:1px dashed #fecaca; border-radius:8px; padding:12px; text-align:center;">
+            <p style="font-size:0.8rem; color:#991b1b; margin:0 0 6px 0;">No sections in this class yet!</p>
+            <button type="button" onclick="openAddSectionModal('{{ c.id }}', '{{ c.name|escapejs }}')" class="btn btn-sm btn-primary" style="font-size:0.75rem; padding:3px 10px;">
+              + Create Section A
+            </button>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Card Footer -->
+      <div style="background:#fafafa; border-top:1px solid #f1f5f9; padding:0.75rem 1.25rem; display:flex; justify-content:space-between; align-items:center; font-size:0.8rem;">
+        <a href="{% url 'student_list' %}?class_id={{ c.id }}" style="font-weight:700; color:#2563eb; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+          <i class="fa-solid fa-users"></i> {{ c.total_students }} Students <i class="fa-solid fa-chevron-right" style="font-size:0.65rem;"></i>
+        </a>
+        <div style="display:flex; gap:12px;">
+          <a href="{% url 'class_fee_master' %}" title="Configure Fee for this class" style="color:#059669; font-weight:600; text-decoration:none;">
+            <i class="fa-solid fa-indian-rupee-sign"></i> Fee
+          </a>
+          <a href="{% url 'timetable' %}?class_id={{ c.id }}" title="Class Schedule" style="color:#64748b; font-weight:600; text-decoration:none;">
+            <i class="fa-regular fa-clock"></i> Routine
+          </a>
+        </div>
+      </div>
+
+    </div>
+    {% empty %}
+    <div style="grid-column: 1 / -1; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:3rem 1rem; text-align:center;">
+      <i class="fa-solid fa-school" style="font-size:3rem; color:#cbd5e1; margin-bottom:1rem;"></i>
+      <h3 style="color:#1e293b; font-weight:800; margin:0 0 8px 0;">No Classes Configured Yet</h3>
+      <p style="color:#64748b; font-size:0.9rem; margin:0 0 1.25rem 0;">Start by adding classes one by one, or use our quick batch preset to set up all classes at once.</p>
+      <button type="button" onclick="openAddClassModal()" class="btn btn-primary" style="margin-right:8px;">
+        + Add First Class
+      </button>
+      <button type="button" onclick="openBulkClassModal()" class="btn btn-secondary">
+        Batch Add Standard Classes (K-12)
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- VIEW 2: MASTER TABLE VIEW (Hidden by default) -->
+  <div id="tableContainer" style="display:none;" class="card-panel">
+    <div class="card-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+      <h4 style="font-size:1rem; font-weight:800; color:#0f172a; margin:0;">
+        <i class="fa-solid fa-table-list" style="color:#2563eb;"></i> Complete Class & Section Master Directory
+      </h4>
+      <span style="font-size:0.8rem; color:#64748b; font-weight:600;">
+        Total {{ classes|length }} Classes &bull; {{ total_sections }} Sections
+      </span>
+    </div>
+    <div class="card-body" style="padding:0; overflow-x:auto;">
+      <table class="custom-table" style="margin:0; font-size:13px;">
+        <thead>
+          <tr>
+            <th class="freeze-action-col" style="text-align:center; width:130px;">Actions</th>
+            <th style="width:60px; text-align:center;">Order</th>
+            <th>Class Name</th>
+            <th>Code</th>
+            <th>Sections & Rooms</th>
+            <th>Class Teachers</th>
+            <th style="text-align:center;">Total Capacity</th>
+            <th style="text-align:center;">Enrolled Students</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in classes %}
+          <tr class="table-row-item" data-search-text="{{ c.name|lower }} {{ c.code|lower }} {% for s in c.sections.all %}{{ s.name|lower }} {{ s.class_teacher.full_name|lower|default:'' }} {{ s.room_number|lower }} {% endfor %}">
+            <td class="freeze-action-col" style="text-align:center;">
+              <div style="display:flex; justify-content:center; gap:6px;">
+                <button type="button" onclick="openAddSectionModal('{{ c.id }}', '{{ c.name|escapejs }}')" class="btn btn-sm" style="background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe; padding:2px 8px; font-size:0.75rem; font-weight:700;" title="Add Section">
+                  <i class="fa-solid fa-plus"></i> Sec
+                </button>
+                <button type="button" onclick="openEditClassModal('{{ c.id }}', '{{ c.name|escapejs }}', '{{ c.code|escapejs }}', '{{ c.order }}')" class="btn btn-sm" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; padding:2px 8px; font-size:0.75rem;" title="Edit Class">
+                  <i class="fa-solid fa-pencil"></i>
+                </button>
+              </div>
+            </td>
+            <td style="text-align:center; font-weight:800; color:#64748b;">#{{ c.order }}</td>
+            <td>
+              <strong style="color:#0f172a; font-size:0.95rem;">{{ c.name }}</strong>
+            </td>
+            <td>
+              <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:800;">{{ c.code }}</span>
+            </td>
+            <td>
+              <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                {% for s in c.sections.all %}
+                <span style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; padding:2px 6px; font-size:0.75rem; font-weight:700; color:#1e293b;">
+                  Sec {{ s.name }} ({{ s.room_number }})
+                </span>
+                {% empty %}
+                <span style="color:#94a3b8; font-size:0.8rem;">No sections</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td>
+              <div style="display:flex; flex-direction:column; gap:2px; font-size:0.78rem;">
+                {% for s in c.sections.all %}
+                <div>
+                  <span style="font-weight:700; color:#475569;">{{ s.name }}:</span> 
+                  {{ s.class_teacher.full_name|default:"Unassigned" }}
+                </div>
+                {% empty %}
+                <span style="color:#94a3b8;">-</span>
+                {% endfor %}
+              </div>
+            </td>
+            <td style="text-align:center; font-weight:700; color:#475569;">
+              {% with sec_caps=c.sections.all %}
+                {{ c.sections.all|length }} sec(s)
+              {% endwith %}
+            </td>
+            <td style="text-align:center;">
+              <a href="{% url 'student_list' %}?class_id={{ c.id }}" class="badge" style="background:#dcfce7; color:#166534; font-weight:800; text-decoration:none;">
+                {{ c.total_students }} Enrolled
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ========================================== -->
+<!-- 1. MODAL: ADD SINGLE CLASS                -->
+<!-- ========================================== -->
+<div id="addClassModal" class="modal-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out;">
+    <div style="background:#0f172a; color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-school" style="color:#38bdf8;"></i> Add New Academic Class
+      </h3>
+      <button type="button" onclick="closeModal('addClassModal')" style="background:none; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'classes' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_class">
+
+      <div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Class Name <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="text" name="name" id="newClassName" required placeholder="e.g. Class 1, Nursery, Class 11" class="form-input" onkeyup="autoGenerateCode()" style="margin:0;">
+          <span style="font-size:0.72rem; color:#64748b;">e.g. Nursery, LKG, Class 1, Class 6, etc.</span>
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Class Code
+          </label>
+          <input type="text" name="code" id="newClassCode" placeholder="e.g. C1, NUR" class="form-input" style="margin:0; text-transform:uppercase;">
+          <span style="font-size:0.72rem; color:#64748b;">Auto-generated if left blank</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Display Order
+        </label>
+        <input type="number" name="order" placeholder="e.g. {{ total_classes|add:1 }}" class="form-input" style="margin:0;" value="{{ total_classes|add:1 }}">
+      </div>
+
+      <!-- Default Section Box -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; margin-bottom:14px;">
+        <label style="display:flex; align-items:center; gap:8px; font-weight:700; color:#1e293b; font-size:0.88rem; cursor:pointer; margin-bottom:8px;">
+          <input type="checkbox" name="create_default_section" id="chkCreateSection" checked onchange="toggleDefaultSectionFields()">
+          <span>Automatically create initial default section (Section A)</span>
+        </label>
+
+        <div id="defaultSectionFields" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:8px;">
+          <div>
+            <label style="font-size:0.75rem; font-weight:700; color:#475569;">Section Name</label>
+            <input type="text" name="default_section_name" value="A" class="form-input" style="margin:0; text-transform:uppercase; font-size:0.85rem;">
+          </div>
+          <div>
+            <label style="font-size:0.75rem; font-weight:700; color:#475569;">Room Number</label>
+            <input type="text" name="default_section_room" value="Room 101" class="form-input" style="margin:0; font-size:0.85rem;">
+          </div>
+          <div>
+            <label style="font-size:0.75rem; font-weight:700; color:#475569;">Capacity</label>
+            <input type="number" name="default_section_capacity" value="40" class="form-input" style="margin:0; font-size:0.85rem;">
+          </div>
+        </div>
+
+        <div id="defaultTeacherField" style="margin-top:8px;">
+          <label style="font-size:0.75rem; font-weight:700; color:#475569;">Class Teacher (Optional)</label>
+          <select name="default_class_teacher_id" class="form-select" style="margin:0; font-size:0.85rem;">
+            <option value="">-- No Teacher Assigned Yet --</option>
+            {% for t in teachers %}
+            <option value="{{ t.id }}">{{ t.full_name }} ({{ t.designation }})</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px; font-size:0.75rem; color:#1e40af; margin-bottom:14px; display:flex; gap:8px;">
+        <i class="fa-solid fa-circle-info" style="font-size:1rem; margin-top:2px;"></i>
+        <span>Upon creating this class, its <strong>Fee Master structure</strong> will automatically be initialized, and can be customized at any time.</span>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeModal('addClassModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:700;">
+          <i class="fa-solid fa-check"></i> Save & Create Class
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========================================== -->
+<!-- 2. MODAL: BATCH / BULK ADD CLASSES        -->
+<!-- ========================================== -->
+<div id="bulkClassModal" class="modal-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:600px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out;">
+    <div style="background:linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%); color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-bolt" style="color:#fbbf24;"></i> Quick Batch Add Classes
+      </h3>
+      <button type="button" onclick="closeModal('bulkClassModal')" style="background:none; border:none; color:#ddd6fe; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'classes' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="bulk_add_classes">
+
+      <p style="font-size:0.85rem; color:#475569; margin-top:0; margin-bottom:12px;">
+        Quickly configure classes for your institution in one click with default Section 'A' and Fee Master records:
+      </p>
+
+      <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:6px;">
+        Choose Preset Group:
+      </label>
+
+      <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="radio" name="batch_preset" value="primary" checked style="margin-top:3px;">
+          <div>
+            <strong style="color:#0f172a; font-size:0.9rem;">Primary Wing (Class 1 to Class 5)</strong>
+            <div style="font-size:0.75rem; color:#64748b;">Creates: Class 1, Class 2, Class 3, Class 4, Class 5</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="radio" name="batch_preset" value="pre_primary" style="margin-top:3px;">
+          <div>
+            <strong style="color:#0f172a; font-size:0.9rem;">Pre-Primary Wing (Playgroup, Nursery, LKG, UKG)</strong>
+            <div style="font-size:0.75rem; color:#64748b;">Creates: Playgroup, Nursery, LKG, UKG</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="radio" name="batch_preset" value="middle" style="margin-top:3px;">
+          <div>
+            <strong style="color:#0f172a; font-size:0.9rem;">Middle Wing (Class 6 to Class 8)</strong>
+            <div style="font-size:0.75rem; color:#64748b;">Creates: Class 6, Class 7, Class 8</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="radio" name="batch_preset" value="secondary" style="margin-top:3px;">
+          <div>
+            <strong style="color:#0f172a; font-size:0.9rem;">Secondary Wing (Class 9 & Class 10)</strong>
+            <div style="font-size:0.75rem; color:#64748b;">Creates: Class 9, Class 10</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="radio" name="batch_preset" value="k12" style="margin-top:3px;">
+          <div>
+            <strong style="color:#0f172a; font-size:0.9rem;">Complete School (Nursery to Class 12)</strong>
+            <div style="font-size:0.75rem; color:#64748b;">Creates all 15 classes from Nursery up to Class 12 in sequence</div>
+          </div>
+        </label>
+
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="radio" name="batch_preset" value="custom" id="radioCustom" style="margin-top:3px;">
+          <div style="flex:1;">
+            <strong style="color:#0f172a; font-size:0.9rem;">Custom Comma-Separated List</strong>
+            <input type="text" name="custom_classes" placeholder="e.g. Pre-Nursery, KG-1, KG-2, Class 1A, Class 1B" class="form-input" style="margin-top:4px; font-size:0.85rem;" onfocus="document.getElementById('radioCustom').checked = true;">
+          </div>
+        </label>
+      </div>
+
+      <div style="font-size:0.75rem; color:#64748b; margin-bottom:14px;">
+        * Existing classes will be safely preserved; only new classes are added.
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeModal('bulkClassModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#7c3aed; border-color:#7c3aed; font-weight:700;">
+          <i class="fa-solid fa-bolt"></i> Generate Classes Now
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========================================== -->
+<!-- 3. MODAL: EDIT CLASS                       -->
+<!-- ========================================== -->
+<div id="editClassModal" class="modal-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:480px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out;">
+    <div style="background:#1e293b; color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-pencil" style="color:#38bdf8;"></i> Edit Class Details
+      </h3>
+      <button type="button" onclick="closeModal('editClassModal')" style="background:none; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'classes' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_class">
+      <input type="hidden" name="class_id" id="editClassId">
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Class Name <span style="color:#dc2626;">*</span>
+        </label>
+        <input type="text" name="name" id="editClassName" required class="form-input" style="margin:0;">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Class Code
+          </label>
+          <input type="text" name="code" id="editClassCode" class="form-input" style="margin:0; text-transform:uppercase;">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Display Order
+          </label>
+          <input type="number" name="order" id="editClassOrder" class="form-input" style="margin:0;">
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeModal('editClassModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:700;">
+          <i class="fa-solid fa-check"></i> Save Changes
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========================================== -->
+<!-- 4. MODAL: ADD SECTION                      -->
+<!-- ========================================== -->
+<div id="addSectionModal" class="modal-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:500px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out;">
+    <div style="background:#065f46; color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-shapes" style="color:#6ee7b7;"></i> Add New Section
+      </h3>
+      <button type="button" onclick="closeModal('addSectionModal')" style="background:none; border:none; color:#a7f3d0; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'classes' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_section">
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Select Class <span style="color:#dc2626;">*</span>
+        </label>
+        <select name="class_id" id="addSecClassSelect" required class="form-select" style="margin:0;">
+          {% for c in classes %}
+          <option value="{{ c.id }}">{{ c.name }} (Code: {{ c.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Section Name <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="text" name="name" required placeholder="e.g. A, B, C, D" class="form-input" style="margin:0; text-transform:uppercase;">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Max Capacity
+          </label>
+          <input type="number" name="capacity" value="40" class="form-input" style="margin:0;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Room Number
+        </label>
+        <input type="text" name="room_number" placeholder="e.g. Room 102, Lab 1" class="form-input" style="margin:0;" value="Room 101">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Class Teacher (Optional)
+        </label>
+        <select name="class_teacher_id" class="form-select" style="margin:0;">
+          <option value="">-- No Class Teacher Assigned --</option>
+          {% for t in teachers %}
+          <option value="{{ t.id }}">{{ t.full_name }} ({{ t.designation }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeModal('addSectionModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#059669; border-color:#059669; font-weight:700;">
+          <i class="fa-solid fa-check"></i> Add Section Now
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========================================== -->
+<!-- 5. MODAL: EDIT SECTION                     -->
+<!-- ========================================== -->
+<div id="editSectionModal" class="modal-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:500px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out;">
+    <div style="background:#1e293b; color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-pencil" style="color:#38bdf8;"></i> Edit Section (<span id="editSecClassTitle"></span>)
+      </h3>
+      <button type="button" onclick="closeModal('editSectionModal')" style="background:none; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'classes' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_section">
+      <input type="hidden" name="section_id" id="editSecId">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Section Name <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="text" name="name" id="editSecName" required class="form-input" style="margin:0; text-transform:uppercase;">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Capacity
+          </label>
+          <input type="number" name="capacity" id="editSecCapacity" class="form-input" style="margin:0;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Room Number
+        </label>
+        <input type="text" name="room_number" id="editSecRoom" class="form-input" style="margin:0;">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Class Teacher
+        </label>
+        <select name="class_teacher_id" id="editSecTeacherSelect" class="form-select" style="margin:0;">
+          <option value="">-- No Class Teacher Assigned --</option>
+          {% for t in teachers %}
+          <option value="{{ t.id }}">{{ t.full_name }} ({{ t.designation }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeModal('editSectionModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:700;">
+          <i class="fa-solid fa-check"></i> Update Section
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- JavaScript for Modals, Filtering, View Toggle -->
+<script>
+  function openModal(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = 'flex';
+    }
+  }
+
+  function closeModal(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.display = 'none';
+    }
+  }
+
+  // Close modal when clicking outside content
+  window.onclick = function(event) {
+    if (event.target.classList.contains('modal-backdrop')) {
+      event.target.style.display = 'none';
+    }
+  };
+
+  function openAddClassModal() {
+    document.getElementById('newClassName').value = '';
+    document.getElementById('newClassCode').value = '';
+    openModal('addClassModal');
+  }
+
+  function openBulkClassModal() {
+    openModal('bulkClassModal');
+  }
+
+  function autoGenerateCode() {
+    const nameVal = document.getElementById('newClassName').value;
+    const codeInput = document.getElementById('newClassCode');
+    if (nameVal && !codeInput.dataset.manuallyEdited) {
+      const clean = nameVal.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+      codeInput.value = clean.substring(0, 8);
+    }
+  }
+
+  document.getElementById('newClassCode')?.addEventListener('input', function() {
+    this.dataset.manuallyEdited = 'true';
+  });
+
+  function toggleDefaultSectionFields() {
+    const checked = document.getElementById('chkCreateSection').checked;
+    document.getElementById('defaultSectionFields').style.display = checked ? 'grid' : 'none';
+    document.getElementById('defaultTeacherField').style.display = checked ? 'block' : 'none';
+  }
+
+  function openEditClassModal(id, name, code, order) {
+    document.getElementById('editClassId').value = id;
+    document.getElementById('editClassName').value = name;
+    document.getElementById('editClassCode').value = code;
+    document.getElementById('editClassOrder').value = order;
+    openModal('editClassModal');
+  }
+
+  function openAddSectionModal(classId = null, className = null) {
+    if (classId) {
+      document.getElementById('addSecClassSelect').value = classId;
+    }
+    openModal('addSectionModal');
+  }
+
+  function openEditSectionModal(secId, className, secName, room, capacity, teacherId) {
+    document.getElementById('editSecId').value = secId;
+    document.getElementById('editSecClassTitle').innerText = className + ' - Section ' + secName;
+    document.getElementById('editSecName').value = secName;
+    document.getElementById('editSecRoom').value = room;
+    document.getElementById('editSecCapacity').value = capacity;
+    document.getElementById('editSecTeacherSelect').value = teacherId || '';
+    openModal('editSectionModal');
+  }
+
+  // Filter Classes
+  function filterClasses() {
+    const term = document.getElementById('classSearchInput').value.toLowerCase().trim();
+    
+    // Filter Grid Cards
+    const cards = document.querySelectorAll('.class-card-item');
+    cards.forEach(card => {
+      const text = card.getAttribute('data-search-text') || '';
+      if (text.includes(term)) {
+        card.style.display = 'flex';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    // Filter Table Rows
+    const rows = document.querySelectorAll('.table-row-item');
+    rows.forEach(row => {
+      const text = row.getAttribute('data-search-text') || '';
+      if (text.includes(term)) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  }
+
+  // Switch between Grid and Table View
+  function switchView(mode) {
+    const gridEl = document.getElementById('gridContainer');
+    const tableEl = document.getElementById('tableContainer');
+    const btnGrid = document.getElementById('btnGridView');
+    const btnTable = document.getElementById('btnTableView');
+
+    if (mode === 'table') {
+      gridEl.style.display = 'none';
+      tableEl.style.display = 'block';
+      btnTable.style.background = '#2563eb';
+      btnTable.style.color = '#fff';
+      btnGrid.style.background = 'transparent';
+      btnGrid.style.color = '#64748b';
+    } else {
+      gridEl.style.display = 'grid';
+      tableEl.style.display = 'none';
+      btnGrid.style.background = '#2563eb';
+      btnGrid.style.color = '#fff';
+      btnTable.style.background = 'transparent';
+      btnTable.style.color = '#64748b';
+    }
+  }
+</script>
+
+<style>
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(-15px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.class-card-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(15,23,42,0.1) !important;
+}
+</style>
+{% endblock %}

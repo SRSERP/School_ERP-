@@ -1,0 +1,286 @@
+{% extends 'school_erp/base.html' %}
+{% load static %}
+
+{% block title %}School Settings & Branding - {{ school.name }}{% endblock %}
+{% block page_title %}School Profile, Branding & Print Settings{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; align-items:center; gap:10px;">
+  <a href="{% url 'dashboard' %}" class="btn btn-secondary" style="font-weight:700;">
+    <i class="fa-solid fa-arrow-left"></i> Dashboard
+  </a>
+  <button type="submit" form="schoolSettingsForm" class="btn btn-primary" style="background:#2563eb; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(37,99,235,0.25);">
+    <i class="fa-solid fa-floppy-disk"></i> Save School Settings & Logo
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="" enctype="multipart/form-data" id="schoolSettingsForm">
+  {% csrf_token %}
+
+  <div style="display:grid; grid-template-columns: 2fr 1fr; gap:24px; align-items:start;">
+    
+    <!-- Left Column: School Information & Contact -->
+    <div style="display:flex; flex-direction:column; gap:20px;">
+      
+      <!-- Card 1: Official Identity -->
+      <div class="card" style="background:#ffffff; border-radius:14px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.03);">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+          <div style="width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:16px;">
+            <i class="fa-solid fa-school"></i>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:16px; font-weight:800; color:#0f172a;">Official School Identity</h3>
+            <span style="font-size:12px; color:#64748b;">This information will be printed on all official fee receipts, report cards, and ID cards</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Full School Name *</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger" style="font-size:12px; margin-top:4px;">{{ form.name.errors }}</div>{% endif %}
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-bottom:16px;">
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Short Brand Name</label>
+            {{ form.short_name }}
+          </div>
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">School Tagline / Motto</label>
+            {{ form.tagline }}
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:14px; margin-bottom:16px;">
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Education Board</label>
+            {{ form.board }}
+          </div>
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Affiliation Number</label>
+            {{ form.affiliation_number }}
+          </div>
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">School Code / Reg No</label>
+            {{ form.school_code }}
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:14px;">
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Principal / Director Name</label>
+            {{ form.principal_name }}
+          </div>
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Currency Symbol</label>
+            {{ form.currency_symbol }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Contact & Address Information -->
+      <div class="card" style="background:#ffffff; border-radius:14px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.03);">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+          <div style="width:34px; height:34px; border-radius:8px; background:#ecfdf5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:16px;">
+            <i class="fa-solid fa-location-dot"></i>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:16px; font-weight:800; color:#0f172a;">Contact & Postal Address</h3>
+            <span style="font-size:12px; color:#64748b;">Appears in slip headers, WhatsApp notifications, and invoices</span>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:14px; margin-bottom:16px;">
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Contact Phone Numbers</label>
+            {{ form.phone }}
+          </div>
+          <div>
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Official Email Address</label>
+            {{ form.email }}
+          </div>
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Website URL</label>
+          {{ form.website }}
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Full Postal Address (for Slips)</label>
+          {{ form.address }}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right Column: Logo, Principal Signature & Live Slip Preview -->
+    <div style="display:flex; flex-direction:column; gap:20px;">
+      
+      <!-- Card 3: School Logo Upload -->
+      <div class="card" style="background:#ffffff; border-radius:14px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.03);">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+          <div style="width:34px; height:34px; border-radius:8px; background:#fef3c7; color:#d97706; display:flex; align-items:center; justify-content:center; font-size:16px;">
+            <i class="fa-solid fa-image"></i>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">School Logo</h3>
+            <span style="font-size:11.5px; color:#64748b;">Printed dynamically on slips & ID cards</span>
+          </div>
+        </div>
+
+        <!-- Logo Preview Box -->
+        <div style="text-align:center; padding:16px; background:#f8fafc; border:1.5px dashed #cbd5e1; border-radius:12px; margin-bottom:14px;">
+          <div id="logoPreviewContainer" style="width:100px; height:100px; margin:0 auto 10px auto; border-radius:12px; overflow:hidden; background:#ffffff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+            {% if school.logo %}
+            <img id="logoPreviewImg" src="{{ school.logo.url }}" alt="{{ school.name }}" style="max-width:100%; max-height:100%; object-fit:contain;">
+            {% else %}
+            <div id="logoPlaceholder" style="font-size:32px; color:#94a3b8;">
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            {% endif %}
+          </div>
+          
+          <label for="schoolLogoInput" class="btn btn-secondary btn-sm" style="cursor:pointer; font-weight:700; border-radius:8px; display:inline-flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Choose New Logo
+          </label>
+          <div style="display:none;">{{ form.logo }}</div>
+          
+          {% if school.logo %}
+          <div style="margin-top:8px;">
+            <label style="font-size:12px; color:#dc2626; cursor:pointer;">
+              <input type="checkbox" name="clear_logo" value="1"> Remove current logo
+            </label>
+          </div>
+          {% endif %}
+        </div>
+        <p style="margin:0; font-size:11px; color:#64748b; line-height:1.4;">
+          <strong>Tip:</strong> Use a high-resolution PNG or JPG image with transparent or white background for sharp receipt printing.
+        </p>
+      </div>
+
+      <!-- Card 4: Principal Signature & Official Stamp Upload -->
+      <div class="card" style="background:#ffffff; border-radius:14px; padding:24px; box-shadow:0 2px 10px rgba(0,0,0,0.03);">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
+          <div style="width:34px; height:34px; border-radius:8px; background:#f3e8ff; color:#7e22ce; display:flex; align-items:center; justify-content:center; font-size:16px;">
+            <i class="fa-solid fa-signature"></i>
+          </div>
+          <div>
+            <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">Principal Stamp / Signature</h3>
+            <span style="font-size:11.5px; color:#64748b;">Printed at the bottom of slips & report cards</span>
+          </div>
+        </div>
+
+        <!-- Signature Preview Box -->
+        <div style="text-align:center; padding:16px; background:#f8fafc; border:1.5px dashed #cbd5e1; border-radius:12px; margin-bottom:14px;">
+          <div id="sigPreviewContainer" style="height:60px; max-width:200px; margin:0 auto 10px auto; border-radius:8px; background:#ffffff; border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; padding:6px; box-shadow:0 1px 4px rgba(0,0,0,0.05);">
+            {% if school.principal_signature %}
+            <img id="sigPreviewImg" src="{{ school.principal_signature.url }}" alt="Principal Signature" style="max-width:100%; max-height:100%; object-fit:contain;">
+            {% else %}
+            <div id="sigPlaceholder" style="font-family:'Brush Script MT', cursive; font-size:1.3rem; color:#475569;">
+              {{ school.principal_name|default:"Principal Seal" }}
+            </div>
+            {% endif %}
+          </div>
+          
+          <label for="principalSigInput" class="btn btn-secondary btn-sm" style="cursor:pointer; font-weight:700; border-radius:8px; display:inline-flex; align-items:center; gap:6px;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Stamp / Signature
+          </label>
+          <div style="display:none;">{{ form.principal_signature }}</div>
+
+          {% if school.principal_signature %}
+          <div style="margin-top:8px;">
+            <label style="font-size:12px; color:#dc2626; cursor:pointer;">
+              <input type="checkbox" name="clear_signature" value="1"> Remove current signature
+            </label>
+          </div>
+          {% endif %}
+        </div>
+        <p style="margin:0; font-size:11px; color:#64748b; line-height:1.4;">
+          <strong>Tip:</strong> Upload a clean PNG image of the principal's signature or school round seal with transparent background.
+        </p>
+      </div>
+
+      <!-- Live Fee Receipt Slip Header Preview Box -->
+      <div class="card" style="background:#ffffff; border-radius:14px; padding:20px; box-shadow:0 2px 10px rgba(0,0,0,0.03); border:1.5px solid #e2e8f0;">
+        <h4 style="margin:0 0 10px 0; font-size:12px; text-transform:uppercase; color:#64748b; font-weight:800; letter-spacing:0.04em;">
+          <i class="fa-solid fa-eye" style="margin-right:4px;"></i> Live Fee Receipt Header Preview
+        </h4>
+        <div style="background:#ffffff; border:1px solid #0f172a; border-radius:6px; padding:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1.5px solid #0f172a; padding-bottom:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div id="liveSlipLogo" style="width:30px; height:30px; border-radius:6px; overflow:hidden; background:#1e1b4b; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:11px;">
+                {% if school.logo %}
+                <img src="{{ school.logo.url }}" style="width:100%; height:100%; object-fit:contain;">
+                {% else %}
+                {{ school.short_name|slice:":3"|default:"ERP" }}
+                {% endif %}
+              </div>
+              <div>
+                <h5 id="liveSlipName" style="font-size:12px; font-weight:900; color:#0f172a; margin:0; text-transform:uppercase; line-height:1.1;">
+                  {{ school.name }}
+                </h5>
+                <p id="liveSlipAffil" style="font-size:7.5px; color:#334155; margin:1px 0 0 0; font-weight:600;">
+                  Affil No: {{ school.affiliation_number }} • Code: {{ school.school_code }}
+                </p>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <span style="background:#0f172a; color:#fff; font-size:8px; font-weight:800; padding:2px 6px; border-radius:3px;">FEE RECEIPT</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <div style="margin-top:24px; text-align:right;">
+    <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:800; font-size:15px; padding:12px 32px; box-shadow:0 4px 14px rgba(37,99,235,0.3);">
+      <i class="fa-solid fa-floppy-disk"></i> Save School Settings & Logo
+    </button>
+  </div>
+</form>
+
+<script>
+  // Live image preview for Logo
+  const logoInput = document.getElementById('schoolLogoInput');
+  if (logoInput) {
+    logoInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          const container = document.getElementById('logoPreviewContainer');
+          container.innerHTML = '<img id="logoPreviewImg" src="' + evt.target.result + '" style="max-width:100%; max-height:100%; object-fit:contain;">';
+          
+          const liveSlipLogo = document.getElementById('liveSlipLogo');
+          if (liveSlipLogo) {
+            liveSlipLogo.innerHTML = '<img src="' + evt.target.result + '" style="width:100%; height:100%; object-fit:contain;">';
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  // Live image preview for Principal Signature
+  const sigInput = document.getElementById('principalSigInput');
+  if (sigInput) {
+    sigInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          const container = document.getElementById('sigPreviewContainer');
+          container.innerHTML = '<img id="sigPreviewImg" src="' + evt.target.result + '" style="max-width:100%; max-height:100%; object-fit:contain;">';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+</script>
+{% endblock %}

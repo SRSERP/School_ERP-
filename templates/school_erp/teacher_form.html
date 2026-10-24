@@ -1,0 +1,110 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card-panel" style="max-width:900px; margin:0 auto;">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding:1.25rem 1.75rem;">
+    <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-chalkboard-user" style="color:var(--primary);"></i>
+      {% if edit_mode %}Update Faculty Profile: {{ teacher.full_name }}{% else %}Register New Faculty / Staff Member{% endif %}
+    </h3>
+    <a href="{% if edit_mode %}{% url 'teacher_detail' teacher.pk %}{% else %}{% url 'teacher_list' %}{% endif %}" class="btn btn-outline btn-sm">Cancel</a>
+  </div>
+
+  <div class="card-body" style="padding:1.75rem;">
+    <form method="POST">
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Employee ID *</label>
+          {{ form.employee_id }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">First Name *</label>
+          {{ form.first_name }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last Name *</label>
+          {{ form.last_name }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Gender</label>
+          {{ form.gender }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date of Birth</label>
+          {{ form.dob }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Official Email *</label>
+          {{ form.email }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone Number *</label>
+          {{ form.phone }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Designation *</label>
+          {{ form.designation }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Department *</label>
+          {{ form.department }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Qualification *</label>
+          {{ form.qualification }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Joining Date</label>
+          {{ form.joining_date }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Monthly Salary (₹)</label>
+          {{ form.salary }}
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">Subjects Taught (Hold Ctrl/Cmd to select multiple)</label>
+          {{ form.subjects_taught }}
+          <small style="color:#64748b; font-size:0.78rem;">Select the subjects this faculty is authorized to teach.</small>
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">Residential Address</label>
+          {{ form.address }}
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px; margin: 1.25rem 0; padding:10px 14px; background:#f8fafc; border-radius:8px; border:1px solid #e2e8f0;">
+        {{ form.is_active }}
+        <label class="form-label" style="margin-bottom:0; font-weight:700; color:#0f172a;">Active Faculty Member (Status)</label>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; border-top:1px solid #e2e8f0; padding-top:1.25rem; flex-wrap:wrap; gap:10px;">
+        <div>
+          {% if edit_mode %}
+          <button type="button" onclick="if(confirm('Are you sure you want to delete this faculty member from records?')) { document.getElementById('deleteFacultyForm').submit(); }" class="btn btn-outline btn-sm" style="color:#ef4444; border-color:#fca5a5;">
+            <i class="fa-solid fa-trash"></i> Delete Faculty Member
+          </button>
+          {% endif %}
+        </div>
+        <div style="display:flex; gap:10px;">
+          <a href="{% if edit_mode %}{% url 'teacher_detail' teacher.pk %}{% else %}{% url 'teacher_list' %}{% endif %}" class="btn btn-secondary">Cancel</a>
+          <button type="submit" class="btn btn-primary" style="padding:10px 24px; font-weight:700;">
+            <i class="fa-solid fa-check"></i> {% if edit_mode %}Save Changes{% else %}Register Faculty{% endif %}
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {% if edit_mode %}
+    <form id="deleteFacultyForm" method="POST" action="{% url 'teacher_delete' teacher.pk %}" style="display:none;">
+      {% csrf_token %}
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

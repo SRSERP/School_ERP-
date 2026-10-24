@@ -1,0 +1,52 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card-panel" style="max-width:750px; margin:0 auto;">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-bullhorn" style="color:var(--primary);"></i> Publish Circular / Notice</h3>
+    <a href="{% url 'notices' %}" class="btn btn-outline btn-sm">Cancel</a>
+  </div>
+  <div class="card-body">
+    <form method="POST">
+      {% csrf_token %}
+      <div class="form-group">
+        <label class="form-label">Notice Title / Headline *</label>
+        {{ form.title }}
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.25rem;">
+        <div class="form-group">
+          <label class="form-label">Target Audience *</label>
+          {{ form.target_audience }}
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notice Expiry Date (Optional)</label>
+          {{ form.expiry_date }}
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Circular Message / Details *</label>
+        {{ form.content }}
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px; margin: 1rem 0; background:#fee2e2; padding:10px 14px; border-radius:8px;">
+        {{ form.is_urgent }}
+        <label class="form-label" style="margin-bottom:0; color:#991b1b; font-weight:700;">
+          Mark as URGENT Notice (Highlight prominently on dashboard)
+        </label>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:1.5rem; border-top:1px solid #e2e8f0; padding-top:1rem;">
+        <a href="{% url 'notices' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" style="padding:10px 24px;">
+          <i class="fa-solid fa-paper-plane"></i> Publish Circular
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

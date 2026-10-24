@@ -1,0 +1,48 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Notice Board{% endblock %}
+{% block page_title %}School Circulars & Notice Board{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'notice_create' %}" class="btn btn-primary btn-sm">
+  <i class="fa-solid fa-bullhorn"></i> Publish New Notice
+</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:900px; margin:0 auto; display:flex; flex-direction:column; gap:1.25rem;">
+  {% for n in notices %}
+  <div class="card-panel" style="margin-bottom:0; {% if n.is_urgent %}border-left: 4px solid #ef4444;{% endif %}">
+    <div class="card-header" style="background:#ffffff; display:flex; justify-content:space-between; align-items:flex-start;">
+      <div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+          {% if n.is_urgent %}
+          <span class="badge badge-urgent"><i class="fa-solid fa-triangle-exclamation"></i> URGENT</span>
+          {% endif %}
+          <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">
+            <i class="fa-solid fa-users"></i> Audience: {{ n.get_target_audience_display }}
+          </span>
+          <span style="font-size:0.75rem; color:#94a3b8;">
+            <i class="fa-regular fa-clock"></i> Posted on: {{ n.created_at|date:"d M Y, h:i A" }}
+          </span>
+        </div>
+        <h3 style="font-size:1.15rem; font-weight:800; color:#0f172a;">{{ n.title }}</h3>
+      </div>
+      {% if n.expiry_date %}
+      <span style="font-size:0.75rem; color:#64748b; background:#f1f5f9; padding:4px 8px; border-radius:4px;">
+        Valid until: {{ n.expiry_date|date:"d M Y" }}
+      </span>
+      {% endif %}
+    </div>
+    <div class="card-body" style="font-size:0.92rem; color:#334155; line-height:1.7;">
+      {{ n.content|linebreaks }}
+    </div>
+  </div>
+  {% empty %}
+  <div class="card-panel" style="text-align:center; padding:3rem 1rem; color:#94a3b8;">
+    <i class="fa-solid fa-bullhorn" style="font-size:2.5rem; color:#cbd5e1; margin-bottom:12px; display:block;"></i>
+    No announcements currently posted.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

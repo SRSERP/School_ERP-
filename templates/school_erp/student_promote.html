@@ -1,0 +1,140 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Move Student to Next Session{% endblock %}
+{% block page_title %}Student Session Migration & Promotion{% endblock %}
+
+{% block content %}
+<div style="max-width:800px; margin:0 auto;">
+
+  <!-- Student Current Bio Card -->
+  <div class="card-panel" style="background:#ffffff; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:1.5rem; overflow:hidden;">
+    <div style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#fff; padding:1.25rem 1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <div>
+        <div style="font-size:0.75rem; color:#a5b4fc; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Student Promotion Dossier</div>
+        <h3 style="margin:2px 0 0 0; font-size:1.3rem; font-weight:800; color:#fff;">
+          {{ student.full_name }}
+        </h3>
+        <div style="font-size:0.82rem; color:#c7d2fe; margin-top:2px;">
+          Adm No: <strong>{{ student.admission_number }}</strong> • Roll No: #{{ student.roll_number }} • Father: {{ student.parent_name }}
+        </div>
+      </div>
+      <div style="text-align:right;">
+        <span class="badge" style="background:rgba(255,255,255,0.2); color:#fff; font-size:0.85rem; padding:6px 12px; font-weight:800;">
+          Current Session: {{ current_session.name }}
+        </span>
+        <div style="font-size:0.8rem; color:#cbd5e1; margin-top:4px;">
+          Current Class: <strong>{{ student.class_level.name }} - Sec {{ student.section.name }}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Validation Notice Card -->
+  <div style="background:#eff6ff; border-left:4px solid #2563eb; padding:1rem 1.25rem; border-radius:0 8px 8px 0; margin-bottom:1.5rem;">
+    <div style="font-weight:800; color:#1e40af; font-size:0.92rem; margin-bottom:2px; display:flex; align-items:center; gap:6px;">
+      <i class="fa-solid fa-circle-info"></i> Session Movement Rules:
+    </div>
+    <p style="margin:0; font-size:0.82rem; color:#1e3a8a;">
+      Students can only be moved to a <strong>Future / Next academic session</strong> (e.g. from <strong>2026-2027</strong> to <strong>2027-2028</strong>). Moving back to a past session is restricted. Academic and fee ledger records for earlier sessions remain preserved.
+    </p>
+  </div>
+
+  <!-- Promotion Form -->
+  <div class="card-panel" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:1.5rem;">
+    
+    {% if not next_sessions %}
+    <div style="text-align:center; padding:2rem; background:#fffbeb; border:1px solid #fde68a; border-radius:10px;">
+      <i class="fa-solid fa-triangle-exclamation" style="font-size:2.5rem; color:#f59e0b; margin-bottom:12px; display:block;"></i>
+      <h4 style="margin:0 0 6px 0; font-weight:800; color:#92400e;">No Next / Future Academic Session Available!</h4>
+      <p style="margin:0 0 16px 0; font-size:0.85rem; color:#b45309;">
+        The student's current session is <strong>{{ current_session.name }}</strong>, but no future academic session is configured. Please create the next academic session first before moving students.
+      </p>
+      <a href="{% url 'academic_sessions_manage' %}" class="btn btn-primary" style="font-weight:700; padding:8px 18px;">
+        <i class="fa-solid fa-plus-circle"></i> Create Next Session Now
+      </a>
+    </div>
+    {% else %}
+
+    <form method="POST">
+      {% csrf_token %}
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem;">
+        
+        <!-- Target Next Session -->
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:6px; display:block;">
+            Target Next Session *
+          </label>
+          <select name="target_session_id" class="form-select" required style="font-weight:700; height:42px;">
+            {% for s in next_sessions %}
+            <option value="{{ s.id }}">
+              {{ s.name }} ({{ s.start_date|date:"M Y" }} - {{ s.end_date|date:"M Y" }})
+            </option>
+            {% endfor %}
+          </select>
+          <small style="color:#059669; font-weight:600; font-size:0.72rem;">
+            <i class="fa-solid fa-check"></i> Only future/next sessions listed
+          </small>
+        </div>
+
+        <!-- Target Promoted Class -->
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:6px; display:block;">
+            Promoted Class *
+          </label>
+          <select name="target_class_id" class="form-select" required style="font-weight:700; height:42px;">
+            {% for c in classes %}
+            <option value="{{ c.id }}" {% if suggested_class.id == c.id %}selected{% endif %}>
+              {{ c.name }} {% if suggested_class.id == c.id and suggested_class.id != student.class_level.id %}(Recommended Next Class){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Target Section -->
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:6px; display:block;">
+            Target Section *
+          </label>
+          <select name="target_section_id" class="form-select" required style="font-weight:700; height:42px;">
+            {% for sec in sections %}
+            <option value="{{ sec.id }}" {% if student.section.id == sec.id %}selected{% endif %}>
+              Sec {{ sec.name }} ({{ sec.class_level.code }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Target Roll Number -->
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:6px; display:block;">
+            Roll Number in New Session *
+          </label>
+          <input type="number" name="target_roll_number" value="{{ student.roll_number }}" class="form-input" min="1" required style="font-weight:700; height:42px;">
+        </div>
+
+      </div>
+
+      <div style="margin-bottom:1.5rem;">
+        <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:6px; display:block;">
+          Promotion / Move Remarks
+        </label>
+        <input type="text" name="remarks" class="form-input" placeholder="e.g. Promoted to next academic session based on annual result" value="Annual Promotion to next grade">
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:1.25rem;">
+        <a href="{% url 'student_detail' student.pk %}" class="btn btn-outline" style="font-weight:600;">
+          <i class="fa-solid fa-arrow-left"></i> Cancel / Back
+        </a>
+        <button type="submit" class="btn btn-primary" style="font-weight:800; padding:10px 24px; background:#2563eb; border-color:#2563eb; display:inline-flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-check-circle"></i> Confirm & Move to Next Session
+        </button>
+      </div>
+
+    </form>
+    {% endif %}
+
+  </div>
+
+</div>
+{% endblock %}

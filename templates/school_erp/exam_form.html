@@ -1,0 +1,68 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="card-panel" style="max-width:750px; margin:0 auto;">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding:1.25rem 1.75rem;">
+    <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-award" style="color:var(--primary);"></i>
+      Schedule New Examination
+    </h3>
+    <a href="{% url 'exam_list' %}" class="btn btn-outline btn-sm">Cancel</a>
+  </div>
+
+  <div class="card-body" style="padding:1.75rem;">
+    <form method="POST">
+      {% csrf_token %}
+      
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Examination Title / Name *</label>
+          {{ form.name }}
+          <small style="color:#64748b; font-size:0.75rem;">e.g., Term 1 / Half-Yearly Examination 2026, Annual Assessment 2026-27</small>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Academic Session</label>
+          {{ form.academic_session }}
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700; color:#1e293b;">Start Date *</label>
+            {{ form.start_date }}
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700; color:#1e293b;">End Date *</label>
+            {{ form.end_date }}
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; background:#f8fafc; padding:14px 16px; border-radius:10px; border:1px solid #e2e8f0;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            {{ form.is_active }}
+            <label for="{{ form.is_active.id_for_label }}" style="margin:0; font-weight:600; color:#1e293b; font-size:0.88rem; cursor:pointer;">
+              Active Examination
+            </label>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            {{ form.is_published }}
+            <label for="{{ form.is_published.id_for_label }}" style="margin:0; font-weight:600; color:#1e293b; font-size:0.88rem; cursor:pointer;">
+              Publish Results Immediately
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:2rem; display:flex; justify-content:flex-end; gap:10px;">
+        <a href="{% url 'exam_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-floppy-disk"></i> Schedule Examination
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

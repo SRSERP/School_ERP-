@@ -1,0 +1,187 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}{% if edit_mode %}Edit User & Permissions{% else %}Register New Staff User{% endif %}{% endblock %}
+{% block page_title %}{% if edit_mode %}Edit User Permissions{% else %}Register New User & Assign Menu Permissions{% endif %}{% endblock %}
+
+{% block content %}
+<div style="max-width:900px; margin:0 auto;">
+
+  <div class="card-panel" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+    <div style="background:#0f172a; color:#fff; padding:1.25rem 1.5rem; display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 style="margin:0 0 4px 0; font-size:1.15rem; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-user-shield" style="color:#60a5fa;"></i>
+          {% if edit_mode %}Edit Staff User: {{ target_user.username }}{% else %}Register New Staff Account{% endif %}
+        </h3>
+        <p style="margin:0; font-size:0.8rem; color:#94a3b8;">
+          Configure login credentials and select exactly which ERP modules this user can view and manage.
+        </p>
+      </div>
+      {% if edit_mode %}
+      <span class="badge" style="background:#3b82f6; color:#fff; font-weight:700;">User ID: #{{ target_user.id }}</span>
+      {% endif %}
+    </div>
+
+    <form method="POST" style="padding:1.5rem;">
+      {% csrf_token %}
+
+      <!-- Section A: Account Credentials -->
+      <h4 style="margin:0 0 1rem 0; font-size:0.95rem; font-weight:800; color:#1e293b; border-bottom:2px solid #f1f5f9; padding-bottom:6px; display:flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-key" style="color:#2563eb;"></i> 1. User Account Credentials
+      </h4>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem;">
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            Username *
+          </label>
+          <input type="text" name="username" value="{{ target_user.username|default:'' }}" class="form-input" required placeholder="e.g. rahul_accounts" style="font-weight:700;">
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            Password {% if edit_mode %}(Leave blank to keep unchanged){% else %}*{% endif %}
+          </label>
+          <input type="password" name="password" class="form-input" {% if not edit_mode %}required{% endif %} placeholder="{% if edit_mode %}•••••••• (Unchanged){% else %}Enter secure password{% endif %}">
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            First Name
+          </label>
+          <input type="text" name="first_name" value="{{ target_user.first_name|default:'' }}" class="form-input" placeholder="e.g. Rahul">
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            Last Name
+          </label>
+          <input type="text" name="last_name" value="{{ target_user.last_name|default:'' }}" class="form-input" placeholder="e.g. Sharma">
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            Email Address
+          </label>
+          <input type="email" name="email" value="{{ target_user.email|default:'' }}" class="form-input" placeholder="rahul@srsschool.edu.in">
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            Contact Phone No
+          </label>
+          <input type="text" name="phone" value="{{ profile.phone|default:'' }}" class="form-input" placeholder="+91 98765 00000">
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label class="form-label" style="font-weight:700; color:#0f172a; margin-bottom:4px; display:block;">
+            Assigned Staff Role *
+          </label>
+          <select name="role" class="form-select" required style="font-weight:700;">
+            <option value="Administrator" {% if profile.role == 'Administrator' %}selected{% endif %}>Administrator (Full Access)</option>
+            <option value="Accountant" {% if profile.role == 'Accountant' %}selected{% endif %}>Fee Accountant (Fees, Counter & Invoices)</option>
+            <option value="Academic_Incharge" {% if profile.role == 'Academic_Incharge' %}selected{% endif %}>Academic / Exam Incharge (Marks, Exams & Classes)</option>
+            <option value="Teacher" {% if profile.role == 'Teacher' %}selected{% endif %}>Teacher / Staff (Attendance & Marks Entry)</option>
+            <option value="Receptionist" {% if profile.role == 'Receptionist' %}selected{% endif %}>Front Office / Admission Desk (Admissions & Directory)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Section B: Menu Permissions -->
+      <h4 style="margin:1.5rem 0 0.75rem 0; font-size:0.95rem; font-weight:800; color:#1e293b; border-bottom:2px solid #f1f5f9; padding-bottom:6px; display:flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-list-check" style="color:#059669;"></i> 2. Menu Access Permissions
+      </h4>
+      <p style="margin:0 0 1rem 0; font-size:0.8rem; color:#64748b;">
+        Select the checkboxes below to grant access to specific ERP modules. Users can only access the modules checked below:
+      </p>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:1.5rem;">
+        
+        <!-- Perm: Students -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_students" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_students %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Students & Admissions</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Student Directory, New Admission, Bulk Excel Upload, ID Cards</span>
+          </div>
+        </label>
+
+        <!-- Perm: Attendance -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_attendance" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_attendance %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Daily Attendance Register</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Mark Daily Student Attendance & Monthly Attendance Reports</span>
+          </div>
+        </label>
+
+        <!-- Perm: Fees -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_fees" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_fees %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Fees & Accounting</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Fee Collection Desk, Invoices, Receipts, Fee Defaulters, Class Rates</span>
+          </div>
+        </label>
+
+        <!-- Perm: Exams -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_exams" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_exams %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Examinations & Results</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Exams Master, Enter Student Marks, Marksheets & Report Cards</span>
+          </div>
+        </label>
+
+        <!-- Perm: Timetable -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_timetable" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_timetable %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Timetable & Routine</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Weekly Classes Schedule & Routine Management</span>
+          </div>
+        </label>
+
+        <!-- Perm: Classes -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_classes" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_classes %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Class & Section Master</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Manage Classes, Sections, Capacity, Class Teachers</span>
+          </div>
+        </label>
+
+        <!-- Perm: Sessions -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_sessions" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if not edit_mode or profile.can_manage_sessions %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Academic Sessions & Migration</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Create Academic Sessions & Move / Promote Students to Next Session</span>
+          </div>
+        </label>
+
+        <!-- Perm: Users -->
+        <label style="display:flex; align-items:flex-start; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; cursor:pointer;">
+          <input type="checkbox" name="can_manage_users" style="width:18px; height:18px; accent-color:#2563eb; margin-top:2px;" {% if profile.can_manage_users %}checked{% endif %}>
+          <div>
+            <strong style="color:#0f172a; font-size:0.88rem; display:block;">Staff User Administration</strong>
+            <span style="font-size:0.75rem; color:#64748b;">Register New Staff & Assign Menu Access Permissions</span>
+          </div>
+        </label>
+
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:1.25rem;">
+        <a href="{% url 'user_list' %}" class="btn btn-outline" style="font-weight:600;">
+          <i class="fa-solid fa-arrow-left"></i> Cancel
+        </a>
+        <button type="submit" class="btn btn-primary" style="font-weight:800; padding:10px 28px; background:#2563eb; border-color:#2563eb; display:inline-flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-floppy-disk"></i> {% if edit_mode %}Save User & Permissions{% else %}Register User{% endif %}
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+</div>
+{% endblock %}

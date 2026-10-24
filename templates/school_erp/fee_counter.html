@@ -1,0 +1,928 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Single-Window Fee Counter{% endblock %}
+{% block page_title %}Student Fee Collection Counter{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:8px;">
+  <a href="{% url 'class_fee_master' %}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-sliders"></i> Class Fee Master
+  </a>
+  <a href="{% url 'fees_defaulters' %}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-users-slash"></i> Defaulters Report
+  </a>
+  <a href="{% url 'fees_list' %}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-arrow-left"></i> Invoices
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1100px; margin:0 auto;">
+
+  <!-- SECTION 1: STUDENT SEARCH & SELECTOR (NO DROPDOWN) -->
+  {% if not selected_student %}
+  <div class="card-panel" style="margin-bottom:1.5rem; border:2px solid #3b82f6; box-shadow:0 4px 16px rgba(59,130,246,0.1);">
+    <div class="card-header" style="background:linear-gradient(135deg, #1e1b4b 0%, #2563eb 100%); color:#fff; padding:1.25rem;">
+      <div>
+        <h3 style="color:#fff; font-size:1.2rem; margin-bottom:4px;">
+          <i class="fa-solid fa-magnifying-glass"></i> Find & Select Student
+        </h3>
+        <p style="font-size:0.85rem; color:#dbeafe; margin:0;">
+          Search student by name, admission number (e.g. 1020), roll number, or class to proceed.
+        </p>
+      </div>
+    </div>
+    <div class="card-body" style="padding:1.5rem;">
+      
+      <!-- Live Search Input -->
+      <div style="position:relative; margin-bottom:1rem;">
+        <i class="fa-solid fa-search" style="position:absolute; left:16px; top:50%; transform:translateY(-50%); color:#64748b; font-size:1.1rem;"></i>
+        <input type="text" id="studentSearchInput" 
+               placeholder="Type Student Name, Admission No (e.g. 1020), Class, or Roll Number..." 
+               class="form-input" 
+               style="padding-left:46px; font-size:1.05rem; font-weight:600; height:50px; border-radius:10px; border:2px solid #cbd5e1;" 
+               autofocus autocomplete="off" oninput="filterStudents()">
+        <span id="searchClearBtn" onclick="clearSearch()" style="position:absolute; right:14px; top:50%; transform:translateY(-50%); cursor:pointer; color:#94a3b8; display:none;">
+          <i class="fa-solid fa-circle-xmark" style="font-size:1.2rem;"></i>
+        </span>
+      </div>
+
+      <!-- Quick Class Filter Pills -->
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:1.25rem; align-items:center;">
+        <span style="font-size:0.8rem; font-weight:700; color:#475569;">Quick Filter:</span>
+        <button type="button" class="btn btn-sm btn-primary class-filter-btn" data-class="all" onclick="filterByClass('all', this)" style="border-radius:20px; font-size:0.8rem;">
+          All Classes
+        </button>
+        {% for c in classes %}
+        <button type="button" class="btn btn-sm btn-secondary class-filter-btn" data-class="{{ c.id }}" onclick="filterByClass('{{ c.id }}', this)" style="border-radius:20px; font-size:0.8rem;">
+          {{ c.name }}
+        </button>
+        {% endfor %}
+      </div>
+
+      <!-- Live Filtered Student Results Grid -->
+      <div id="studentResultsContainer" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; max-height:450px; overflow-y:auto; padding:4px;">
+        <!-- Filled dynamically by JavaScript -->
+      </div>
+      <div id="noResultsMsg" style="display:none; text-align:center; padding:2.5rem; color:#64748b;">
+        <i class="fa-solid fa-user-slash" style="font-size:2.5rem; color:#cbd5e1; margin-bottom:8px; display:block;"></i>
+        No matching student found. Please try a different name or admission number.
+      </div>
+    </div>
+  </div>
+  {% else %}
+
+  <!-- SELECTED STUDENT BANNER -->
+  <div style="background:#ffffff; border:2px solid #3b82f6; border-radius:12px; padding:1.25rem; margin-bottom:1.5rem; box-shadow:0 4px 12px rgba(59,130,246,0.08); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <div style="width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg, #3b82f6 0%, #1e1b4b 100%); color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.5rem; font-weight:800; box-shadow:0 2px 8px rgba(37,99,235,0.3);">
+        {{ selected_student.first_name|slice:":1" }}{{ selected_student.last_name|slice:":1" }}
+      </div>
+      <div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <h2 style="font-size:1.35rem; font-weight:900; color:#0f172a; margin:0;">
+            {{ selected_student.full_name }}
+          </h2>
+          <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:800; font-size:0.8rem;">
+            Roll #{{ selected_student.roll_number }}
+          </span>
+          <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:700; font-size:0.8rem;">
+            {{ selected_student.class_level.name }} - Sec {{ selected_student.section.name }}
+          </span>
+        </div>
+        <p style="font-size:0.85rem; color:#64748b; margin:3px 0 0 0;">
+          Adm No: <strong style="color:#0f172a;">{{ selected_student.admission_number }}</strong> • 
+          Father: <strong>{{ selected_student.parent_name }}</strong> • 
+          <i class="fa-solid fa-phone" style="font-size:0.75rem;"></i> {{ selected_student.parent_phone }}
+        </p>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:14px;">
+      <!-- Outstanding Due Badge -->
+      <div style="background:{% if previous_due > 0 %}#fee2e2{% else %}#ecfdf5{% endif %}; border:2px solid {% if previous_due > 0 %}#ef4444{% else %}#10b981{% endif %}; border-radius:10px; padding:8px 18px; text-align:center;">
+        <span style="font-size:0.72rem; font-weight:800; color:{% if previous_due > 0 %}#991b1b{% else %}#065f46{% endif %}; text-transform:uppercase; letter-spacing:0.04em; display:block;">
+          Previous Balance
+        </span>
+        <div style="font-size:1.4rem; font-weight:900; color:{% if previous_due > 0 %}#991b1b{% else %}#065f46{% endif %};">
+          {{ school.currency_symbol }}{{ previous_due|floatformat:0 }}
+        </div>
+      </div>
+
+      <!-- Change Student Button -->
+      <a href="{% url 'fee_counter' %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+        <i class="fa-solid fa-users"></i> Change Student
+      </a>
+    </div>
+  </div>
+
+  <!-- SECTION 2: 12-MONTH FEE CALENDAR & FEE COLLECTION FORM -->
+  <form method="POST" id="feeCounterForm">
+    {% csrf_token %}
+    <input type="hidden" name="student_id" value="{{ selected_student.id }}">
+    <input type="hidden" name="submit_payment" value="1">
+
+    <!-- 12-MONTH ACADEMIC FEE GRID -->
+    <div class="card-panel" style="margin-bottom:1.5rem;">
+      <div class="card-header" style="background:#0f172a; color:#fff; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h3 style="color:#fff; font-size:1.1rem; margin-bottom:2px;">
+            <i class="fa-solid fa-calendar-days" style="color:#38bdf8;"></i> 12-Month Academic Fee Calendar (Session 2026-2027)
+          </h3>
+          <span style="font-size:0.8rem; color:#94a3b8;">
+            Select monthly tuition terms • Cleared months are shown in green and locked
+          </span>
+        </div>
+
+        <!-- Quick Multi-Month Selection Buttons -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-sm" onclick="selectNextMonths(1)" style="background:#1e293b; color:#38bdf8; border:1px solid #38bdf8; font-weight:700; font-size:0.78rem;">
+            <i class="fa-solid fa-bolt"></i> 1 Month (Next Due)
+          </button>
+          <button type="button" class="btn btn-sm" onclick="selectNextMonths(3)" style="background:#1e293b; color:#a78bfa; border:1px solid #a78bfa; font-weight:700; font-size:0.78rem;">
+            <i class="fa-solid fa-bolt"></i> 3 Months (Quarterly)
+          </button>
+          <button type="button" class="btn btn-sm" onclick="selectNextMonths(6)" style="background:#1e293b; color:#34d399; border:1px solid #34d399; font-weight:700; font-size:0.78rem;">
+            <i class="fa-solid fa-bolt"></i> 6 Months (Half-Yearly)
+          </button>
+          <button type="button" class="btn btn-sm btn-secondary" onclick="clearMonthSelection()" style="font-size:0.78rem;">
+            Clear Selection
+          </button>
+        </div>
+      </div>
+
+      <div class="card-body" style="padding:1.25rem;">
+        
+        <!-- Rate & Live Summary Bar -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.25rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 16px; flex-wrap:wrap; gap:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <label style="font-size:0.85rem; font-weight:700; color:#334155; margin:0;">
+              Monthly Tuition Rate:
+            </label>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span style="font-weight:700; color:#0f172a;">{{ school.currency_symbol }}</span>
+              <input type="number" step="1" name="monthly_rate" id="monthly_rate" 
+                     value="{{ default_monthly_amt|floatformat:0 }}" 
+                     class="form-input" style="width:110px; font-weight:800; color:#065f46; height:36px;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <div style="font-size:0.85rem;">
+            <span id="selectedMonthsCountLabel" style="font-weight:800; color:#2563eb; background:#dbeafe; padding:4px 10px; border-radius:6px;">
+              0 Months Selected
+            </span>
+            <span id="selectedMonthsTotalLabel" style="font-weight:900; color:#065f46; margin-left:8px; font-size:1.05rem;">
+              ₹0
+            </span>
+          </div>
+        </div>
+
+        <!-- 12-Month Visual Cards Grid -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:12px;">
+          {% for m in fee_details.months_status %}
+          
+          {% if m.is_paid %}
+          <!-- PAID MONTH CARD (LOCKED & GREEN) -->
+          <div style="background:#ecfdf5; border:2px solid #10b981; border-radius:10px; padding:12px; position:relative;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:4px;">
+              <span class="badge" style="background:#059669; color:#fff; font-weight:800; font-size:0.7rem;">
+                <i class="fa-solid fa-circle-check"></i> PAID
+              </span>
+              <span style="font-size:0.75rem; font-weight:700; color:#065f46;">{{ m.qtr }}</span>
+            </div>
+            <div style="font-weight:800; font-size:0.95rem; color:#065f46;">
+              {{ m.name }}
+            </div>
+            <div style="font-size:0.75rem; color:#047857; margin-top:2px;">
+              <strong>₹{{ m.paid_amount|floatformat:0 }}</strong>
+            </div>
+            <div style="font-size:0.7rem; color:#059669; margin-top:4px; border-top:1px dashed #6ee7b7; padding-top:4px;">
+              Slip #{{ m.receipt_no }} ({{ m.paid_date }})
+            </div>
+          </div>
+          {% else %}
+          <!-- UNPAID / DUE MONTH CARD (SELECTABLE) -->
+          <label class="month-card" for="chk_m_{{ m.id }}" 
+                 id="card_m_{{ m.id }}"
+                 style="background:#ffffff; border:2px solid #cbd5e1; border-radius:10px; padding:12px; cursor:pointer; display:block; transition:all 0.2s ease;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <input type="checkbox" name="selected_months" value="{{ m.name }}" 
+                     id="chk_m_{{ m.id }}" 
+                     class="month-chk" 
+                     data-id="{{ m.id }}" 
+                     data-name="{{ m.name }}" 
+                     onchange="onMonthCheckChange('{{ m.id }}')" 
+                     style="width:18px; height:18px; cursor:pointer;">
+              <span style="font-size:0.72rem; font-weight:700; color:#64748b; background:#f1f5f9; padding:2px 6px; border-radius:4px;">
+                {{ m.qtr }}
+              </span>
+            </div>
+            <div style="font-weight:800; font-size:0.95rem; color:#0f172a;" id="lbl_m_{{ m.id }}">
+              {{ m.name }}
+            </div>
+            <div style="font-size:0.78rem; color:#64748b; margin-top:2px;">
+              <span class="month-amt-label" style="font-weight:700; color:#0f172a;">₹{{ default_monthly_amt|floatformat:0 }}</span>
+            </div>
+          </label>
+          {% endif %}
+
+          {% endfor %}
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SECTION 3: EXAMINATION FEE & OTHER HEADS -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:1.5rem;">
+      
+      <!-- EXAMINATION FEE CARD -->
+      <div class="card-panel" style="margin:0;">
+        <div class="card-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:10px 16px;">
+          <h4 style="font-size:0.95rem; font-weight:800; color:#0f172a; margin:0;">
+            <i class="fa-solid fa-file-pen" style="color:#4f46e5;"></i> Examination Fees
+          </h4>
+        </div>
+        <div class="card-body" style="padding:1rem; display:flex; flex-direction:column; gap:10px;">
+          {% for exam in fee_details.exams_status %}
+            {% if exam.is_paid %}
+            <div style="background:#ecfdf5; border:1px solid #10b981; border-radius:8px; padding:10px 12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:800; color:#065f46; font-size:0.9rem;">{{ exam.name }}</span>
+                <span class="badge" style="background:#059669; color:#fff; font-weight:800; font-size:0.7rem;">
+                  <i class="fa-solid fa-check"></i> PAID
+                </span>
+              </div>
+              <div style="font-size:0.75rem; color:#047857; margin-top:3px;">
+                ₹{{ exam.paid_info.amount|floatformat:0 }} Cleared • Slip #{{ exam.paid_info.receipt_no }} ({{ exam.paid_info.paid_date }})
+              </div>
+            </div>
+            {% else %}
+            <div style="background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="selected_exams" value="{{ exam.name }}" 
+                       id="exam_{{ forloop.counter }}" class="exam-chk" 
+                       data-amt="{{ exam.default_amount|floatformat:0 }}" 
+                       onchange="calcTotal()" style="width:18px; height:18px;">
+                <label for="exam_{{ forloop.counter }}" style="font-weight:700; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  {{ exam.name }}
+                </label>
+              </div>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <span style="font-weight:700; font-size:0.85rem;">₹</span>
+                <input type="number" step="1" name="exam_amt_{{ exam.name }}" 
+                       id="amt_exam_{{ forloop.counter }}" 
+                       value="{{ exam.default_amount|floatformat:0 }}" 
+                       class="form-input" style="width:90px; height:32px; font-weight:700; font-size:0.85rem;" oninput="calcTotal()">
+              </div>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- PREVIOUS BALANCE DUE (ARREARS) CARD -->
+      <div class="card-panel" style="margin:0;">
+        <div class="card-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:10px 16px;">
+          <h4 style="font-size:0.95rem; font-weight:800; color:#991b1b; margin:0;">
+            <i class="fa-solid fa-clock-rotate-left" style="color:#ef4444;"></i> Previous Balance Due
+          </h4>
+        </div>
+        <div class="card-body" style="padding:1rem;">
+          {% if previous_due > 0 %}
+          <div style="background:#fef2f2; border:2px solid #f87171; border-radius:8px; padding:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-weight:800; color:#991b1b; font-size:0.95rem;">
+                Total Outstanding Balance: ₹{{ previous_due|floatformat:0 }}
+              </span>
+              <span class="badge" style="background:#ef4444; color:#fff; font-weight:800;">DUE</span>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <input type="checkbox" name="include_previous_due" id="chk_previous_due" 
+                     class="form-checkbox" checked onchange="togglePreviousDueInput()" style="width:18px; height:18px;">
+              <label for="chk_previous_due" style="font-weight:700; color:#991b1b; cursor:pointer; font-size:0.88rem; margin:0;">
+                Pay Previous Balance Today
+              </label>
+            </div>
+
+            <div id="prevDueAmountBox" style="display:flex; align-items:center; gap:10px;">
+              <label style="font-size:0.8rem; font-weight:700; color:#7f1d1d; margin:0;">Arrears Amount to Clear (₹):</label>
+              <input type="number" step="1" name="previous_due_cleared_amount" id="previous_due_cleared_amount" 
+                     value="{{ previous_due|floatformat:0 }}" class="form-input" 
+                     style="width:130px; height:34px; font-weight:800; color:#991b1b; border-color:#f87171;" oninput="calcTotal()">
+            </div>
+
+            <div style="font-size:0.75rem; color:#b91c1c; margin-top:8px; line-height:1.4;">
+              * <em>Note: If the parent is only paying current fees today and past balance will be settled later, uncheck the box above. Past balance will remain preserved on their account.</em>
+            </div>
+          </div>
+          {% else %}
+          <div style="background:#ecfdf5; border:1px solid #10b981; border-radius:8px; padding:1.25rem; text-align:center;">
+            <i class="fa-solid fa-circle-check" style="font-size:2rem; color:#059669; margin-bottom:6px;"></i>
+            <div style="font-weight:800; color:#065f46; font-size:1rem;">No Previous Balance Due</div>
+            <p style="font-size:0.8rem; color:#047857; margin:0;">This student has no outstanding balance from earlier sessions.</p>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- SECTION 4: SCHOOL ITEMS, BOOKS, UNIFORM & AUXILIARY FEES (CLASS MASTER DRIVEN) -->
+    <div class="card-panel" style="margin-bottom:1.5rem; border:1px solid #cbd5e1; border-radius:12px; overflow:hidden;">
+      <div class="card-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <h4 style="font-size:0.95rem; font-weight:800; color:#0f172a; margin:0; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-boxes-packing" style="color:var(--primary);"></i> 
+            School Items, Uniform & Auxiliary Fees (Books, Uniform, Accessories)
+          </h4>
+          <span style="font-size:11.5px; color:#64748b;">
+            Standard rates pre-loaded from Class <strong>{{ selected_student.class_level.name }}</strong> Fee Master
+          </span>
+        </div>
+        <a href="{% url 'class_fee_master' %}" target="_blank" style="font-size:11.5px; color:#2563eb; text-decoration:none; font-weight:700; display:inline-flex; align-items:center; gap:4px;">
+          <i class="fa-solid fa-sliders"></i> Edit Class Master Rates &raquo;
+        </a>
+      </div>
+
+      <div class="card-body" style="padding:1.25rem;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:14px;">
+
+          <!-- 1. Admission Fee -->
+          <div style="background:#fffbeb; border:1.5px solid #fde68a; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_admission">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_admission" id="chk_admission" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_admission" style="font-weight:900; color:#92400e; cursor:pointer; font-size:0.92rem; margin:0;">
+                  🎓 Admission Fee
+                </label>
+              </div>
+              <span style="background:#fef3c7; color:#92400e; font-size:10px; font-weight:800; padding:2px 6px; border-radius:4px;">
+                One-time
+              </span>
+            </div>
+            <div style="font-size:11px; color:#b45309; margin-bottom:6px;">New Enrolment & Registration Fee</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#92400e;">₹</span>
+              <input type="number" step="1" name="admission_amount" id="admission_amount" 
+                     value="{{ default_admission_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:900; color:#92400e; font-size:0.92rem; border-color:#fcd34d;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 2. Book Set -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_books">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_books" id="chk_books" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_books" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  📚 Book Set
+                </label>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Full Book & Notebook Pack</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="book_set_amount" id="book_set_amount" 
+                     value="{{ default_book_set_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 3. School Uniform / Dress -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_dress">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_dress" id="chk_dress" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_dress" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  👔 Uniform / Dress
+                </label>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Standard School Uniform Set</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="dress_amount" id="dress_amount" 
+                     value="{{ default_dress_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 4. Tie & Belt -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_tie_belt">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_tie_belt" id="chk_tie_belt" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_tie_belt" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  🎗️ Tie & Belt
+                </label>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">School Monogram Tie & Belt</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="tie_belt_amount" id="tie_belt_amount" 
+                     value="{{ default_tie_belt_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 5. School Diary -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_diary">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_diary" id="chk_diary" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_diary" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  📔 School Diary
+                </label>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Academic Almanac / Diary</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="diary_amount" id="diary_amount" 
+                     value="{{ default_diary_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 6. Student ID Card -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_id_card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_id_card" id="chk_id_card" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_id_card" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  🪪 Student ID Card
+                </label>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Smart RFID / Barcode Card</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="id_card_amount" id="id_card_amount" 
+                     value="{{ default_id_card_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 7. Transport / Bus Fee -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_transport">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_transport" id="chk_transport" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_transport" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  🚌 Transport / Bus
+                </label>
+              </div>
+            </div>
+            <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Monthly Transport Route</div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="transport_amount" id="transport_amount" 
+                     value="{{ default_transport_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+          <!-- 8. Other / Miscellaneous Fee -->
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_other">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="include_other" id="chk_other" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <label for="chk_other" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
+                  ✨ Other / Misc Fee
+                </label>
+              </div>
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:6px;">
+              <input type="text" name="other_description" value="Activity & Sports Fee" class="form-input" style="height:32px; font-size:11.5px; padding:4px 8px;" placeholder="Fee Description">
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+              <input type="number" step="1" name="other_amount" id="other_amount" 
+                     value="{{ default_other_amt|floatformat:0 }}" 
+                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 5: LIVE CALCULATION & PAYMENT SUMMARY DESK -->
+    <div style="background:#ffffff; border:2px solid #0f172a; border-radius:12px; padding:1.5rem; margin-bottom:1.5rem; box-shadow:0 6px 20px rgba(15,23,42,0.08);">
+      <h3 style="font-size:1.15rem; font-weight:900; color:#0f172a; margin-bottom:1.25rem; display:flex; align-items:center; gap:10px;">
+        <i class="fa-solid fa-calculator" style="color:var(--primary);"></i> Step 3: Fee Settlement & Receipt Summary
+      </h3>
+
+      <!-- 4 Metric Cards Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:1.5rem;">
+        
+        <!-- Metric 1: Current Selected Fees -->
+        <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; padding:12px; text-align:center;">
+          <span style="font-size:0.75rem; font-weight:800; color:#64748b; text-transform:uppercase;">
+            Current Fees Selected
+          </span>
+          <div id="lbl_selected_fees" style="font-size:1.5rem; font-weight:900; color:#0f172a; margin-top:2px;">
+            ₹0
+          </div>
+        </div>
+
+        <!-- Metric 2: Previous Due To Pay -->
+        <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:10px; padding:12px; text-align:center;">
+          <span style="font-size:0.75rem; font-weight:800; color:#991b1b; text-transform:uppercase;">
+            Previous Due Paid
+          </span>
+          <div id="lbl_prev_due_cleared" style="font-size:1.5rem; font-weight:900; color:#991b1b; margin-top:2px;">
+            ₹0
+          </div>
+        </div>
+
+        <!-- Metric 3: Amount Paying Now (Input) -->
+        <div style="background:#ecfdf5; border:2px solid #10b981; border-radius:10px; padding:12px;">
+          <label style="font-size:0.75rem; font-weight:900; color:#065f46; text-transform:uppercase; display:block; margin-bottom:4px;">
+            <i class="fa-solid fa-hand-holding-dollar"></i> Amount Paying Today *
+          </label>
+          <input type="number" step="1" name="amount_paying_now" id="amount_paying_now" 
+                 value="0" class="form-input" 
+                 style="font-size:1.4rem; font-weight:900; color:#065f46; border:2px solid #10b981; height:44px;" 
+                 oninput="calcTotal(false)">
+        </div>
+
+        <!-- Metric 4: Final Remaining Balance Due -->
+        <div style="background:#fee2e2; border:2px solid #ef4444; border-radius:10px; padding:12px; text-align:center;">
+          <span style="font-size:0.75rem; font-weight:900; color:#991b1b; text-transform:uppercase;">
+            Total Remaining Due
+          </span>
+          <div id="lbl_final_balance" style="font-size:1.6rem; font-weight:900; color:#991b1b; margin-top:2px;">
+            ₹{{ previous_due|floatformat:0 }}
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Payment Method & Txn Details Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:1.25rem;">
+        
+        <div>
+          <label class="form-label" style="font-weight:700;">Discount / Concession (₹):</label>
+          <input type="number" step="1" name="discount" id="discount" value="0" class="form-input" style="font-weight:700;" oninput="calcTotal(true)">
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700;">Payment Mode *:</label>
+          <select name="payment_method" class="form-select" style="font-weight:700;">
+            <option value="Cash">Cash</option>
+            <option value="UPI / QR">UPI / QR (PhonePe, GPay, Paytm)</option>
+            <option value="Debit/Credit Card">Debit / Credit Card</option>
+            <option value="Net Banking">Net Banking</option>
+            <option value="Cheque / DD">Cheque / Demand Draft</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label" style="font-weight:700;">Txn Ref / Cheque No / Notes:</label>
+          <input type="text" name="transaction_reference" placeholder="e.g. UPI-88902 or Cheque #1234" class="form-input">
+        </div>
+
+      </div>
+
+      <!-- Submit & Generate Receipt Action Bar -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; padding-top:1.25rem; border-top:2px solid #e2e8f0; flex-wrap:wrap; gap:12px;">
+        <div style="font-size:0.85rem; color:#64748b;">
+          <i class="fa-solid fa-receipt"></i> Submitting will automatically generate an <strong>official combined fee receipt</strong> ready for printing.
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="padding:14px 36px; font-size:1.1rem; font-weight:800; background:linear-gradient(135deg, #059669 0%, #047857 100%); border-color:#059669; box-shadow:0 4px 14px rgba(5,150,105,0.35);">
+          <i class="fa-solid fa-print"></i> Collect Payment & Print Combined Fee Slip
+        </button>
+      </div>
+
+    </div>
+
+  </form>
+
+  <!-- SECTION 6: STUDENT'S RECENT PAYMENT HISTORY -->
+  {% if fee_details.receipts_history %}
+  <div class="card-panel" style="margin-top:1.5rem;">
+    <div class="card-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
+      <h4 style="font-size:0.95rem; font-weight:800; color:#0f172a; margin:0;">
+        <i class="fa-solid fa-history" style="color:#64748b;"></i> Recent Fee Receipts for {{ selected_student.first_name }}
+      </h4>
+    </div>
+    <div class="card-body" style="padding:0;">
+      <table class="custom-table" style="margin:0;">
+        <thead>
+          <tr>
+            <th>Receipt #</th>
+            <th>Date</th>
+            <th>Billed</th>
+            <th>Amount Paid</th>
+            <th>Balance Due</th>
+            <th>Mode</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in fee_details.receipts_history %}
+          <tr>
+            <td><strong style="color:var(--primary);">{{ r.receipt_number }}</strong></td>
+            <td>{{ r.payment_date|date:"d M Y" }}</td>
+            <td>₹{{ r.total_billed|floatformat:0 }}</td>
+            <td><strong style="color:#059669;">₹{{ r.amount_paid|floatformat:0 }}</strong></td>
+            <td>
+              {% if r.remaining_balance_due > 0 %}
+              <span style="color:#dc2626; font-weight:700;">₹{{ r.remaining_balance_due|floatformat:0 }}</span>
+              {% else %}
+              <span style="color:#059669; font-weight:700;">₹0 (Clear)</span>
+              {% endif %}
+            </td>
+            <td><span class="badge" style="background:#e0f2fe; color:#0369a1;">{{ r.payment_method }}</span></td>
+            <td>
+              <a href="{% url 'unified_receipt' r.id %}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:0.75rem;">
+                <i class="fa-solid fa-print"></i> View Slip
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+</div>
+
+<!-- EMBEDDED JAVASCRIPT FOR FAST SEARCH & 12-MONTH CALENDAR LOGIC -->
+<script>
+  // All Students JSON for Client-Side Fast Filtering
+  const allStudents = {{ students_json|safe }};
+  const currentStudentPrevDue = parseFloat("{{ previous_due|default:'0' }}") || 0;
+
+  document.addEventListener("DOMContentLoaded", function() {
+    renderStudentsList(allStudents);
+    if (document.getElementById("feeCounterForm")) {
+      calcTotal(true);
+    }
+  });
+
+  // Client-side instant student filtering
+  function filterStudents() {
+    const q = (document.getElementById("studentSearchInput").value || "").toLowerCase().trim();
+    const clearBtn = document.getElementById("searchClearBtn");
+    if (clearBtn) clearBtn.style.display = q ? "block" : "none";
+
+    let filtered = allStudents.filter(s => {
+      return s.name.toLowerCase().includes(q) ||
+             s.adm_no.toLowerCase().includes(q) ||
+             s.class_name.toLowerCase().includes(q) ||
+             s.roll.toString().includes(q) ||
+             s.father.toLowerCase().includes(q);
+    });
+
+    renderStudentsList(filtered);
+  }
+
+  function clearSearch() {
+    document.getElementById("studentSearchInput").value = "";
+    document.getElementById("searchClearBtn").style.display = "none";
+    renderStudentsList(allStudents);
+  }
+
+  function filterByClass(classId, btn) {
+    document.querySelectorAll(".class-filter-btn").forEach(b => {
+      b.classList.remove("btn-primary");
+      b.classList.add("btn-secondary");
+    });
+    btn.classList.remove("btn-secondary");
+    btn.classList.add("btn-primary");
+
+    if (classId === 'all') {
+      renderStudentsList(allStudents);
+    } else {
+      const filtered = allStudents.filter(s => s.class_id == classId);
+      renderStudentsList(filtered);
+    }
+  }
+
+  function renderStudentsList(list) {
+    const container = document.getElementById("studentResultsContainer");
+    const noResults = document.getElementById("noResultsMsg");
+    if (!container) return;
+
+    container.innerHTML = "";
+
+    if (list.length === 0) {
+      if (noResults) noResults.style.display = "block";
+      return;
+    }
+    if (noResults) noResults.style.display = "none";
+
+    list.slice(0, 30).forEach(s => {
+      const card = document.createElement("div");
+      card.style.background = "#ffffff";
+      card.style.border = "1px solid #e2e8f0";
+      card.style.borderRadius = "10px";
+      card.style.padding = "12px";
+      card.style.display = "flex";
+      card.style.justifyContent = "space-between";
+      card.style.alignItems = "center";
+      card.style.cursor = "pointer";
+      card.style.transition = "all 0.15s ease";
+      card.onmouseover = () => { card.style.borderColor = "#3b82f6"; card.style.background = "#eff6ff"; };
+      card.onmouseout = () => { card.style.borderColor = "#e2e8f0"; card.style.background = "#ffffff"; };
+      card.onclick = () => { window.location.href = `?student_id=${s.id}`; };
+
+      const dueBadge = s.due > 0 
+        ? `<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:800; font-size:0.75rem;">Due: ₹${Math.round(s.due)}</span>`
+        : `<span class="badge" style="background:#ecfdf5; color:#065f46; font-weight:700; font-size:0.75rem;">Clear</span>`;
+
+      card.innerHTML = `
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:40px; height:40px; border-radius:50%; background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:0.95rem;">
+            ${s.name.slice(0, 1)}
+          </div>
+          <div>
+            <div style="font-weight:800; color:#0f172a; font-size:0.95rem;">${s.name}</div>
+            <div style="font-size:0.75rem; color:#64748b;">
+              <strong>${s.adm_no}</strong> • ${s.class_name} • Roll #${s.roll}
+            </div>
+            ${s.father ? `<div style="font-size:0.7rem; color:#94a3b8;">Father: ${s.father}</div>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          ${dueBadge}
+          <div style="margin-top:6px;">
+            <span class="btn btn-primary btn-sm" style="font-size:0.75rem; padding:4px 10px;">Select & Pay &raquo;</span>
+          </div>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  // Multi-Month Checkbox Handling
+  function onMonthCheckChange(monthId) {
+    const chk = document.getElementById("chk_m_" + monthId);
+    const card = document.getElementById("card_m_" + monthId);
+    if (!chk || !card) return;
+
+    if (chk.checked) {
+      card.style.borderColor = "#2563eb";
+      card.style.background = "#eff6ff";
+    } else {
+      card.style.borderColor = "#cbd5e1";
+      card.style.background = "#ffffff";
+    }
+    calcTotal(true);
+  }
+
+  function selectNextMonths(count) {
+    clearMonthSelection(false);
+    const unpaidChks = Array.from(document.querySelectorAll(".month-chk"));
+    let selected = 0;
+    for (let chk of unpaidChks) {
+      if (selected >= count) break;
+      chk.checked = true;
+      const mId = chk.getAttribute("data-id");
+      const card = document.getElementById("card_m_" + mId);
+      if (card) {
+        card.style.borderColor = "#2563eb";
+        card.style.background = "#eff6ff";
+      }
+      selected++;
+    }
+    calcTotal(true);
+  }
+
+  function clearMonthSelection(triggerCalc = true) {
+    document.querySelectorAll(".month-chk").forEach(chk => {
+      chk.checked = false;
+      const mId = chk.getAttribute("data-id");
+      const card = document.getElementById("card_m_" + mId);
+      if (card) {
+        card.style.borderColor = "#cbd5e1";
+        card.style.background = "#ffffff";
+      }
+    });
+    if (triggerCalc) calcTotal(true);
+  }
+
+  function togglePreviousDueInput() {
+    const chk = document.getElementById("chk_previous_due");
+    const box = document.getElementById("prevDueAmountBox");
+    if (box) {
+      box.style.display = (chk && chk.checked) ? "flex" : "none";
+    }
+    calcTotal(true);
+  }
+
+  // Unified Real-Time Calculation Logic
+  function calcTotal(autoUpdatePayingNow = false) {
+    const monthlyRate = parseFloat(document.getElementById("monthly_rate") ? document.getElementById("monthly_rate").value || 0 : 0);
+    
+    // 1. Calculate Selected Months
+    const checkedMonths = document.querySelectorAll(".month-chk:checked");
+    const monthsCount = checkedMonths.length;
+    const monthsTotal = monthsCount * monthlyRate;
+
+    // Update monthly badges
+    document.querySelectorAll(".month-amt-label").forEach(el => {
+      el.innerText = "₹" + Math.round(monthlyRate);
+    });
+    if (document.getElementById("selectedMonthsCountLabel")) {
+      document.getElementById("selectedMonthsCountLabel").innerText = `${monthsCount} Month${monthsCount === 1 ? '' : 's'} Selected`;
+    }
+    if (document.getElementById("selectedMonthsTotalLabel")) {
+      document.getElementById("selectedMonthsTotalLabel").innerText = "₹" + Math.round(monthsTotal);
+    }
+
+    // 2. Exam Fees
+    let examTotal = 0;
+    document.querySelectorAll(".exam-chk:checked").forEach(chk => {
+      const idx = chk.id.replace("exam_", "");
+      const amtInput = document.getElementById("amt_exam_" + idx);
+      const val = amtInput ? parseFloat(amtInput.value || 0) : parseFloat(chk.getAttribute("data-amt") || 0);
+      examTotal += val;
+    });
+
+    // 3. Class Master Items & Optional Fees
+    let itemsTotal = 0;
+    
+    function checkItem(chkId, amtId, boxId) {
+      const chk = document.getElementById(chkId);
+      const amtInput = document.getElementById(amtId);
+      const box = document.getElementById(boxId);
+      if (chk && chk.checked) {
+        if (box) {
+          box.style.borderColor = "#2563eb";
+          box.style.background = "#eff6ff";
+        }
+        return amtInput ? parseFloat(amtInput.value || 0) : 0;
+      } else {
+        if (box) {
+          box.style.borderColor = "#e2e8f0";
+          box.style.background = "#f8fafc";
+        }
+        return 0;
+      }
+    }
+
+    itemsTotal += checkItem("chk_books", "book_set_amount", "box_books");
+    itemsTotal += checkItem("chk_dress", "dress_amount", "box_dress");
+    itemsTotal += checkItem("chk_tie_belt", "tie_belt_amount", "box_tie_belt");
+    itemsTotal += checkItem("chk_diary", "diary_amount", "box_diary");
+    itemsTotal += checkItem("chk_id_card", "id_card_amount", "box_id_card");
+    itemsTotal += checkItem("chk_transport", "transport_amount", "box_transport");
+    itemsTotal += checkItem("chk_admission", "admission_amount", "box_admission");
+    itemsTotal += checkItem("chk_other", "other_amount", "box_other");
+
+    // Current Fees Selected Today
+    const currentFeesSelected = monthsTotal + examTotal + itemsTotal;
+    if (document.getElementById("lbl_selected_fees")) {
+      document.getElementById("lbl_selected_fees").innerText = "₹" + Math.round(currentFeesSelected);
+    }
+
+    // 5. Previous Due Cleared Today
+    let prevDueCleared = 0;
+    const chkPrev = document.getElementById("chk_previous_due");
+    if (chkPrev && chkPrev.checked) {
+      const prevInput = document.getElementById("previous_due_cleared_amount");
+      prevDueCleared = prevInput ? parseFloat(prevInput.value || 0) : 0;
+    }
+    if (document.getElementById("lbl_prev_due_cleared")) {
+      document.getElementById("lbl_prev_due_cleared").innerText = "₹" + Math.round(prevDueCleared);
+    }
+
+    // 6. Discount
+    const discount = parseFloat(document.getElementById("discount") ? document.getElementById("discount").value || 0 : 0);
+
+    // Total Billed On This Slip
+    const totalBilledThisSlip = Math.max(0, (currentFeesSelected + prevDueCleared) - discount);
+
+    // Auto-update amount paying now if requested (e.g. on checkbox clicks)
+    const payingInput = document.getElementById("amount_paying_now");
+    if (autoUpdatePayingNow && payingInput) {
+      payingInput.value = Math.round(totalBilledThisSlip);
+    }
+
+    const amountPaying = payingInput ? parseFloat(payingInput.value || 0) : 0;
+
+    // Correct Remaining Balance Calculation (Discount is SUBTRACTED, NEVER added to due):
+    const netNewCharges = Math.max(0, currentFeesSelected - discount);
+    const cashForOld = (chkPrev && chkPrev.checked) ? Math.min(amountPaying, prevDueCleared) : 0;
+    const cashForNew = Math.max(0, amountPaying - cashForOld);
+
+    const unpaidNew = Math.max(0, netNewCharges - cashForNew);
+    const unpaidOld = Math.max(0, currentStudentPrevDue - cashForOld);
+    const finalRemainingDue = unpaidOld + unpaidNew;
+
+    if (document.getElementById("lbl_final_balance")) {
+      document.getElementById("lbl_final_balance").innerText = "₹" + Math.round(finalRemainingDue);
+    }
+  }
+</script>
+{% endblock %}

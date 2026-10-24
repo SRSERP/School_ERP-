@@ -1,0 +1,142 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Collect Fee - {{ invoice.invoice_number }}{% endblock %}
+{% block page_title %}Record Fee Collection / Installment{% endblock %}
+
+{% block content %}
+<div class="card-panel" style="max-width:850px; margin:0 auto;">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-hand-holding-dollar" style="color:var(--success);"></i> Fee Payment Collection</h3>
+    <a href="{% url 'fees_list' %}" class="btn btn-outline btn-sm">Back to Fees</a>
+  </div>
+  <div class="card-body">
+    <!-- Invoice Details Summary Box -->
+    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; margin-bottom:1.5rem; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:14px; font-size:0.88rem;">
+      <div>
+        <span style="color:#64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Student Name</span>
+        <strong style="display:block; color:#0f172a; font-size:1.1rem; margin-top:2px;">{{ invoice.student.full_name }}</strong>
+        <span style="color:#64748b; font-size:0.75rem;">Adm: {{ invoice.student.admission_number }}</span>
+      </div>
+
+      <div>
+        <span style="color:#64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Class & Section</span>
+        <strong style="display:block; color:#0f172a; font-size:1.05rem; margin-top:2px;">{{ invoice.student.class_level.name }} - Sec {{ invoice.student.section.name }}</strong>
+        <span style="color:#64748b; font-size:0.75rem;">Roll No: #{{ invoice.student.roll_number }}</span>
+      </div>
+
+      <div>
+        <span style="color:#64748b; font-size:0.75rem; text-transform:uppercase; font-weight:700;">Fee Category</span>
+        <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:700; display:inline-block; margin-top:4px;">{{ invoice.fee_category.name }}</span>
+        <div style="font-size:0.75rem; color:#64748b; margin-top:4px;">Invoice: {{ invoice.invoice_number }}</div>
+      </div>
+
+      <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:10px; text-align:center;">
+        <span style="color:#64748b; font-size:0.72rem; text-transform:uppercase; font-weight:700;">Total Billed</span>
+        <div style="font-size:1.1rem; font-weight:800; color:#1e293b;">{{ school.currency_symbol }}{{ invoice.total_payable|floatformat:0 }}</div>
+        <div style="font-size:0.72rem; color:#065f46; font-weight:600;">Paid: {{ school.currency_symbol }}{{ invoice.total_paid|floatformat:0 }}</div>
+      </div>
+
+      <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:10px; text-align:center;">
+        <span style="color:#991b1b; font-size:0.72rem; text-transform:uppercase; font-weight:800;">Balance Due</span>
+        <div style="font-size:1.35rem; font-weight:800; color:#991b1b;">{{ school.currency_symbol }}{{ invoice.remaining_due|floatformat:0 }}</div>
+      </div>
+    </div>
+
+    <!-- Previous Installments History for this Invoice -->
+    {% if invoice.payments.exists %}
+    <div style="margin-bottom:1.5rem; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <div style="background:#f1f5f9; padding:8px 14px; font-weight:700; font-size:0.82rem; color:#334155; display:flex; justify-content:space-between;">
+        <span><i class="fa-solid fa-clock-rotate-left"></i> Previous Installments Paid for this Invoice ({{ invoice.payments.count }})</span>
+        <span style="color:#065f46; font-weight:700;">Total Deposited: {{ school.currency_symbol }}{{ invoice.total_paid|floatformat:0 }}</span>
+      </div>
+      <div class="table-responsive">
+        <table class="custom-table" style="font-size:0.82rem;">
+          <thead>
+            <tr>
+              <th>Receipt #</th>
+              <th>Date</th>
+              <th>Amount Paid</th>
+              <th>Mode</th>
+              <th>Txn Ref</th>
+              <th>Receipt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in invoice.payments.all %}
+            <tr>
+              <td><strong>{{ p.receipt_number }}</strong></td>
+              <td>{{ p.payment_date|date:"d M Y" }}</td>
+              <td style="color:#065f46; font-weight:700;">+{{ school.currency_symbol }}{{ p.amount_paid|floatformat:0 }}</td>
+              <td>{{ p.payment_method }}</td>
+              <td>{{ p.transaction_reference|default:"-" }}</td>
+              <td>
+                <a href="{% url 'fee_receipt' p.id %}" class="btn btn-outline btn-sm" target="_blank">
+                  <i class="fa-solid fa-print"></i> View
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Payment Collection Form -->
+    <form method="POST">
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Receipt Number (Auto Generated)</label>
+          {{ form.receipt_number }}
+        </div>
+
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label class="form-label">Amount Paying Now ({{ school.currency_symbol }}) *</label>
+            <button type="button" onclick="fillFullBalance()" style="background:none; border:none; color:var(--primary); font-size:0.75rem; font-weight:700; cursor:pointer; text-decoration:underline;">
+              Pay Full Balance ({{ school.currency_symbol }}{{ invoice.remaining_due|floatformat:0 }})
+            </button>
+          </div>
+          {{ form.amount_paid }}
+          <span style="font-size:0.72rem; color:#64748b;">Aap chahein to poori fee ya aadhi/partial installment jama kar sakte hain.</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Payment Date *</label>
+          {{ form.payment_date }}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Payment Method *</label>
+          {{ form.payment_method }}
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">Transaction Reference (UPI Txn ID / Cheque No / Bank Ref)</label>
+          {{ form.transaction_reference }}
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">Remarks / Notes (Optional)</label>
+          {{ form.notes }}
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:1.5rem; border-top:1px solid #e2e8f0; padding-top:1rem;">
+        <a href="{% url 'fees_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" style="padding:10px 24px; background:#059669; border-color:#059669;">
+          <i class="fa-solid fa-receipt"></i> Submit Payment & Print Receipt
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  function fillFullBalance() {
+    const remaining = "{{ invoice.remaining_due|floatformat:2 }}";
+    document.getElementById("id_amount_paid").value = remaining;
+  }
+</script>
+{% endblock %}

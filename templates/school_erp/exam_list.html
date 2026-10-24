@@ -1,0 +1,161 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Examinations{% endblock %}
+{% block page_title %}Examinations & Student Assessments{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; align-items:center;">
+  <a href="{% url 'exam_create' %}" class="btn btn-primary btn-sm" style="background:#2563eb; border-color:#2563eb; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-plus-circle"></i> + Schedule New Exam
+  </a>
+  <a href="{% url 'marks_entry' %}" class="btn btn-secondary btn-sm" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-pen-to-square"></i> Enter Student Marks
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Scheduled Examinations Table -->
+<div class="card-panel" style="margin-bottom:2rem;">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-award" style="color:var(--primary);"></i> Scheduled Examinations
+    </h3>
+    <span style="font-size:0.8rem; color:#64748b; font-weight:600;">Total: {{ exams.count }} Exam(s)</span>
+  </div>
+  <div class="table-responsive">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <th class="freeze-action-col" style="min-width:210px; text-align:center;">Actions</th>
+          <th>Examination Name</th>
+          <th>Academic Session</th>
+          <th>Start Date</th>
+          <th>End Date</th>
+          <th>Status</th>
+          <th>Results Published</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ex in exams %}
+        <tr>
+          <td class="freeze-action-col" style="text-align:center;">
+            <div style="display:inline-flex; gap:6px; align-items:center;">
+              <a href="{% url 'marks_entry' %}?exam_id={{ ex.id }}" class="btn btn-primary btn-sm" style="font-weight:700; font-size:0.75rem; padding:4px 8px;" title="Enter Marks">
+                <i class="fa-solid fa-pen-to-square"></i> Marks
+              </a>
+              <a href="{% url 'exam_toggle_publish' ex.id %}" class="btn btn-sm {% if ex.is_published %}btn-outline{% else %}btn-secondary{% endif %}" style="font-size:0.75rem; padding:4px 8px; font-weight:700;" title="Toggle Published State">
+                {% if ex.is_published %}
+                <i class="fa-solid fa-eye-slash" style="color:#d97706;"></i> Unpublish
+                {% else %}
+                <i class="fa-solid fa-check" style="color:#059669;"></i> Publish
+                {% endif %}
+              </a>
+              <form method="POST" action="{% url 'exam_delete' ex.id %}" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete \'{{ ex.name }}\' and all its student marks?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline btn-sm" style="color:#dc2626; border-color:#fca5a5; padding:4px 8px; font-size:0.75rem;" title="Delete Exam">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+          <td><strong style="color:#0f172a; font-size:0.95rem;">{{ ex.name }}</strong></td>
+          <td>{{ ex.academic_session.name|default:school.academic_year }}</td>
+          <td>{{ ex.start_date|date:"d M Y" }}</td>
+          <td>{{ ex.end_date|date:"d M Y" }}</td>
+          <td>
+            {% if ex.is_active %}
+            <span class="badge badge-active">Active</span>
+            {% else %}
+            <span class="badge badge-inactive">Completed</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if ex.is_published %}
+            <span class="badge badge-paid"><i class="fa-solid fa-circle-check"></i> Published</span>
+            {% else %}
+            <span class="badge badge-partial"><i class="fa-solid fa-clock"></i> Drafting Marks</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" style="text-align:center; padding:2rem; color:#94a3b8;">
+            No examinations registered yet. Click <strong>+ Schedule New Exam</strong> above to create one.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Class-wise Bulk Marksheet Generator Box -->
+<div class="card-panel" style="margin-bottom:2rem;">
+  <div class="card-header" style="background:linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);">
+    <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-print" style="color:var(--primary);"></i> Class-wise Bulk Marksheet Printing
+    </h3>
+  </div>
+  <div class="card-body" style="padding:1.5rem;">
+    <p style="font-size:0.85rem; color:#64748b; margin-bottom:1.25rem;">
+      Select an examination and a class below to generate printable report cards for every student in that class in one single document.
+    </p>
+
+    <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end;">
+      <div style="flex:1; min-width:200px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b; font-size:0.85rem;">Select Examination *</label>
+        <select id="bulkExamSelect" class="form-select" style="width:100%;">
+          {% for ex in exams %}
+          <option value="{{ ex.id }}">{{ ex.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="flex:1; min-width:180px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b; font-size:0.85rem;">Select Class *</label>
+        <select id="bulkClassSelect" class="form-select" style="width:100%;">
+          {% for c in classes %}
+          <option value="{{ c.id }}">{{ c.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="flex:1; min-width:160px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b; font-size:0.85rem;">Filter Section (Optional)</label>
+        <select id="bulkSectionSelect" class="form-select" style="width:100%;">
+          <option value="">All Sections</option>
+          {% for sec in sections %}
+          <option value="{{ sec.id }}">{{ sec.class_level.name }} - {{ sec.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <button type="button" onclick="openBulkReportCards()" class="btn btn-primary" style="background:#0f172a; border-color:#0f172a; font-weight:800; display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 20px;">
+          <i class="fa-solid fa-print"></i> Generate & Print Marksheets
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openBulkReportCards() {
+  var examId = document.getElementById('bulkExamSelect').value;
+  var classId = document.getElementById('bulkClassSelect').value;
+  var sectionId = document.getElementById('bulkSectionSelect').value;
+
+  if (!examId || !classId) {
+    alert('Please select both an Examination and a Class.');
+    return;
+  }
+
+  var url = '/exams/' + examId + '/bulk-cards/' + classId + '/';
+  if (sectionId) {
+    url += '?section_id=' + sectionId;
+  }
+  window.location.href = url;
+}
+</script>
+{% endblock %}

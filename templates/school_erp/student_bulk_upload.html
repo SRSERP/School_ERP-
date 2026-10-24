@@ -1,0 +1,419 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Bulk Student Upload{% endblock %}
+{% block page_title %}Bulk Student Upload & Excel Import{% endblock %}
+
+{% block header_actions %}{% endblock %}
+
+{% block content %}
+<div style="max-width:1050px; margin:0 auto;">
+
+  <!-- Page Action Header Banner -->
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; flex-wrap:wrap; gap:12px; background:#ffffff; padding:1.25rem 1.5rem; border-radius:12px; border:1px solid #e2e8f0; box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+    <div>
+      <h2 style="margin:0 0 4px 0; font-size:1.25rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:10px;">
+        <i class="fa-solid fa-cloud-arrow-up" style="color:#2563eb;"></i> Bulk Student Import
+      </h2>
+      <span style="font-size:0.82rem; color:#64748b;">Enroll multiple students simultaneously using an Excel or CSV spreadsheet</span>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <a href="{% url 'student_excel_template' %}" class="btn btn-secondary btn-sm" style="font-weight:700; background:#f8fafc; border:1px solid #cbd5e1; color:#0f172a; padding:7px 14px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-file-excel" style="color:#059669;"></i> Download Template (.xlsx)
+      </a>
+      <a href="{% url 'student_list' %}" class="btn btn-primary btn-sm" style="font-weight:700; background:#2563eb; border:1px solid #2563eb; color:#ffffff; padding:7px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-users"></i> Student Directory
+      </a>
+    </div>
+  </div>
+
+  <!-- Upload Results & Duplicate Report Section (shown when an upload has been performed) -->
+  {% if upload_result %}
+  <div class="card-panel" style="margin-bottom:2rem; border:2px solid {% if upload_result.duplicate_count > 0 %}#f59e0b{% else %}#10b981{% endif %};">
+    <div class="card-header" style="background:{% if upload_result.duplicate_count > 0 %}#fffbeb{% else %}#ecfdf5{% endif %}; border-bottom:1px solid {% if upload_result.duplicate_count > 0 %}#fde68a{% else %}#a7f3d0{% endif %}; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:{% if upload_result.duplicate_count > 0 %}#92400e{% else %}#065f46{% endif %}; display:flex; align-items:center; gap:8px;">
+          {% if upload_result.duplicate_count > 0 %}
+          <i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i> Upload Results & Duplicate Analysis Report
+          {% else %}
+          <i class="fa-solid fa-circle-check" style="color:#059669;"></i> Upload Successful
+          {% endif %}
+        </h3>
+        <span style="font-size:0.8rem; color:#64748b;">File: <strong>{{ upload_result.filename }}</strong> | Total Rows: <strong>{{ upload_result.total_rows }}</strong></span>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <a href="{% url 'student_list' %}" class="btn btn-primary btn-sm" style="font-weight:700;">
+          <i class="fa-solid fa-users"></i> Student Directory
+        </a>
+        <a href="{% url 'student_bulk_upload' %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+          <i class="fa-solid fa-arrow-rotate-left"></i> Upload New File
+        </a>
+      </div>
+    </div>
+
+    <div class="card-body" style="padding:1.25rem;">
+      <!-- Stat Cards -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:1.5rem;">
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:#64748b; text-transform:uppercase;">Total Rows Processed</div>
+          <div style="font-size:1.6rem; font-weight:800; color:#0f172a;">{{ upload_result.total_rows }}</div>
+        </div>
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 16px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:#166534; text-transform:uppercase;">Enrolled Successfully</div>
+          <div style="font-size:1.6rem; font-weight:800; color:#15803d;">{{ upload_result.created_count }}</div>
+        </div>
+        <div style="background:{% if upload_result.duplicate_count > 0 %}#fef2f2{% else %}#f8fafc{% endif %}; border:1px solid {% if upload_result.duplicate_count > 0 %}#fecaca{% else %}#e2e8f0{% endif %}; border-radius:10px; padding:12px 16px; text-align:center;">
+          <div style="font-size:0.75rem; font-weight:700; color:{% if upload_result.duplicate_count > 0 %}#991b1b{% else %}#64748b{% endif %}; text-transform:uppercase;">Duplicates Skipped</div>
+          <div style="font-size:1.6rem; font-weight:800; color:{% if upload_result.duplicate_count > 0 %}#dc2626{% else %}#64748b{% endif %};">{{ upload_result.duplicate_count }}</div>
+        </div>
+      </div>
+
+      <!-- Duplicate Entries Warning Table -->
+      {% if upload_result.duplicates %}
+      <div style="border:1px solid #fecaca; border-radius:10px; overflow:hidden; margin-bottom:1.5rem;">
+        <div style="background:#fee2e2; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="margin:0; font-size:0.95rem; font-weight:800; color:#991b1b; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-ban" style="color:#dc2626;"></i>
+            Skipped Duplicate Entries (No duplicate record created)
+          </h4>
+          <span style="background:#dc2626; color:#fff; font-weight:800; padding:4px 10px; border-radius:12px; font-size:0.75rem;">
+            {{ upload_result.duplicate_count }} Duplicate Rows
+          </span>
+        </div>
+        <div style="padding:10px 14px; background:#fff5f5; font-size:0.82rem; color:#7f1d1d; border-bottom:1px solid #fecaca;">
+          <i class="fa-solid fa-triangle-exclamation"></i> These rows matched existing records by <strong>Student Name</strong>, <strong>Father Name</strong>, and <strong>Date of Birth</strong>, so they were skipped to avoid duplicates.
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="margin:0; font-size:0.85rem; width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#fef2f2; border-bottom:2px solid #fecaca;">
+                <th style="padding:10px; width:70px; text-align:center; color:#991b1b;">Row #</th>
+                <th style="padding:10px; color:#991b1b;">Student Name</th>
+                <th style="padding:10px; color:#991b1b;">Father Name</th>
+                <th style="padding:10px; color:#991b1b;">Date of Birth</th>
+                <th style="padding:10px; color:#991b1b;">Class</th>
+                <th style="padding:10px; color:#991b1b;">Duplicate Reason / Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for dup in upload_result.duplicates %}
+              <tr style="background:#fff; border-bottom:1px solid #fecaca;">
+                <td style="padding:10px; text-align:center; font-weight:800; color:#64748b;">{{ dup.row_num }}</td>
+                <td style="padding:10px; font-weight:700; color:#0f172a;">{{ dup.student_name }}</td>
+                <td style="padding:10px; color:#334155;">{{ dup.father_name }}</td>
+                <td style="padding:10px;"><span style="background:#e0f2fe; color:#0369a1; font-weight:700; padding:2px 8px; border-radius:4px; font-size:0.8rem;">{{ dup.dob }}</span></td>
+                <td style="padding:10px;">{{ dup.class_name }} (Sec {{ dup.section }})</td>
+                <td style="padding:10px;">
+                  <span style="display:inline-flex; align-items:center; gap:6px; color:#b91c1c; font-weight:700; font-size:0.82rem;">
+                    <i class="fa-solid fa-circle-xmark"></i> {{ dup.reason }}
+                  </span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Successfully Enrolled Students Table -->
+      {% if upload_result.created_students %}
+      <div style="border:1px solid #bbf7d0; border-radius:10px; overflow:hidden;">
+        <div style="background:#dcfce7; padding:10px 14px; display:flex; justify-content:space-between; align-items:center;">
+          <h4 style="margin:0; font-size:0.95rem; font-weight:800; color:#166534; display:flex; align-items:center; gap:8px;">
+            <i class="fa-solid fa-circle-check" style="color:#16a34a;"></i>
+            Successfully Enrolled Students
+          </h4>
+          <span style="background:#16a34a; color:#fff; font-weight:800; padding:4px 10px; border-radius:12px; font-size:0.75rem;">
+            {{ upload_result.created_count }} Enrolled
+          </span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="data-table" style="margin:0; font-size:0.85rem; width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f0fdf4; border-bottom:2px solid #bbf7d0;">
+                <th style="padding:10px; width:70px; text-align:center; color:#166534;">Row #</th>
+                <th style="padding:10px; color:#166534;">Admission No</th>
+                <th style="padding:10px; color:#166534;">Student Name</th>
+                <th style="padding:10px; color:#166534;">Father Name</th>
+                <th style="padding:10px; color:#166534;">Date of Birth</th>
+                <th style="padding:10px; color:#166534;">Class & Section</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for st in upload_result.created_students %}
+              <tr style="border-bottom:1px solid #e2e8f0;">
+                <td style="padding:10px; text-align:center; font-weight:800; color:#64748b;">{{ st.row_num }}</td>
+                <td style="padding:10px; font-weight:800; color:#2563eb;">{{ st.admission_number }}</td>
+                <td style="padding:10px; font-weight:700; color:#0f172a;">{{ st.student_name }}</td>
+                <td style="padding:10px; color:#334155;">{{ st.father_name }}</td>
+                <td style="padding:10px;">{{ st.dob }}</td>
+                <td style="padding:10px;"><span style="background:#f1f5f9; color:#0f172a; font-weight:700; padding:2px 8px; border-radius:4px;">{{ st.class_name }} (Sec {{ st.section }})</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Step 1 & 2 Workflow Banner -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:1.25rem; margin-bottom:1.5rem;">
+    <!-- Step 1: Download -->
+    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; box-shadow:0 2px 8px rgba(0,0,0,0.04); display:flex; flex-direction:column; justify-content:space-between;">
+      <div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div style="width:36px; height:36px; border-radius:8px; background:#ecfdf5; color:#059669; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem;">
+            1
+          </div>
+          <div>
+            <h4 style="margin:0; font-size:1rem; font-weight:800; color:#0f172a;">Step 1: Download Sample Excel / CSV</h4>
+            <span style="font-size:0.75rem; color:#64748b;">Download formatted spreadsheet template</span>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; color:#475569; margin:0 0 12px 0;">
+          Fill in student name, roll number, class, section, parent name, contact phone, and Aadhaar in the pre-configured template.
+        </p>
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px; margin-top:8px;">
+        <label style="font-size:0.75rem; font-weight:700; color:#475569; display:block; margin-bottom:4px;">
+          Choose Class for Pre-filled Template:
+        </label>
+        <div style="display:flex; gap:8px;">
+          <select id="templateClassSelect" class="form-select" style="font-size:0.82rem; margin:0; padding:6px 10px;">
+            <option value="">-- All Classes (Standard) --</option>
+            {% for c in classes %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="button" onclick="downloadCustomTemplate('xlsx')" class="btn btn-sm btn-primary" style="background:#059669; border-color:#059669; font-weight:700; white-space:nowrap;">
+            <i class="fa-solid fa-download"></i> .XLSX
+          </button>
+          <button type="button" onclick="downloadCustomTemplate('csv')" class="btn btn-sm btn-secondary" style="font-weight:700; white-space:nowrap;">
+            .CSV
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2: Upload -->
+    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:1.25rem; box-shadow:0 2px 8px rgba(0,0,0,0.04); display:flex; flex-direction:column; justify-content:space-between;">
+      <div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <div style="width:36px; height:36px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem;">
+            2
+          </div>
+          <div>
+            <h4 style="margin:0; font-size:1rem; font-weight:800; color:#0f172a;">Step 2: Upload Completed File</h4>
+            <span style="font-size:0.75rem; color:#64748b;">Upload filled Excel or CSV file</span>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; color:#475569; margin:0;">
+          The system will automatically enroll all students into the chosen class/section, configure their admission ledger, and initialize their fee structure.
+        </p>
+      </div>
+
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px; margin-top:8px; font-size:0.78rem; color:#1e40af;">
+        <i class="fa-solid fa-circle-check"></i> <strong>Aadhaar Support:</strong> Both Student and Parent 12-digit Aadhaar numbers can be optionally imported directly from the spreadsheet.
+      </div>
+    </div>
+  </div>
+
+  <!-- Upload Form Panel -->
+  <div class="card-panel" style="margin-bottom:1.5rem;">
+    <div class="card-header" style="background:#0f172a; color:#fff; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-cloud-arrow-up" style="color:#38bdf8;"></i> Upload Student Spreadsheet
+      </h3>
+      <span style="font-size:0.75rem; color:#94a3b8;">Supports .XLSX, .XLS, .CSV</span>
+    </div>
+
+    <div class="card-body" style="padding:1.5rem;">
+      <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:16px;">
+          <div>
+            <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+              Target Class (Fallback if class column is blank in Excel)
+            </label>
+            <select name="target_class_id" class="form-select" style="margin:0;">
+              <option value="">-- Detect Automatically from Excel File --</option>
+              {% for c in classes %}
+              <option value="{{ c.id }}">Assign rows to {{ c.name }}</option>
+              {% endfor %}
+            </select>
+            <span style="font-size:0.72rem; color:#64748b;">If <code>Class_Name</code> is specified in Excel, rows will automatically map to that class.</span>
+          </div>
+
+          <div>
+            <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+              Default Section (Fallback if section column is blank)
+            </label>
+            <input type="text" name="default_section" value="A" class="form-input" style="margin:0; text-transform:uppercase;">
+            <span style="font-size:0.72rem; color:#64748b;">Default Section 'A' will be applied if not specified.</span>
+          </div>
+        </div>
+
+        <!-- File Upload Drag Zone -->
+        <div style="border:2px dashed #cbd5e1; border-radius:12px; padding:2rem 1.5rem; text-align:center; background:#f8fafc; margin-bottom:1.5rem; transition:border-color 0.2s;" id="dropZone">
+          <i class="fa-solid fa-file-excel" style="font-size:3rem; color:#059669; margin-bottom:10px;"></i>
+          <h4 style="margin:0 0 6px 0; font-size:1.1rem; color:#0f172a; font-weight:800;">Choose Your Excel or CSV File</h4>
+          <p style="margin:0 0 14px 0; font-size:0.85rem; color:#64748b;">Click browse or drag & drop the completed spreadsheet here</p>
+          
+          <input type="file" name="excel_file" id="excelFileInput" accept=".xlsx, .xls, .csv" required style="display:none;" onchange="handleFileSelect(this)">
+          
+          <button type="button" onclick="document.getElementById('excelFileInput').click()" class="btn btn-secondary" style="font-weight:700;">
+            <i class="fa-solid fa-folder-open"></i> Browse File
+          </button>
+          
+          <div id="selectedFileName" style="margin-top:12px; font-size:0.85rem; font-weight:700; color:#2563eb; display:none;">
+            <i class="fa-solid fa-file"></i> <span id="fileNameText"></span>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="font-size:0.78rem; color:#64748b;">
+            <i class="fa-solid fa-shield-halved" style="color:#059669;"></i> <strong>Duplicate Protection:</strong> The system checks for duplicates based on <strong>Student Name</strong>, <strong>Father Name</strong>, and <strong>Date of Birth</strong>. Existing students are safely skipped.
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="padding:10px 28px; font-weight:800; background:#2563eb; font-size:0.95rem;">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Upload & Import Students Now
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Excel Column Reference Guide -->
+  <div class="card-panel">
+    <div class="card-header" style="background:#f1f5f9; border-bottom:1px solid #e2e8f0;">
+      <h4 style="margin:0; font-size:0.95rem; font-weight:800; color:#334155;">
+        <i class="fa-solid fa-table-cells"></i> Excel Column Reference & Guidelines
+      </h4>
+    </div>
+    <div class="card-body" style="padding:0; overflow-x:auto;">
+      <div style="background:#eff6ff; border-bottom:1px solid #bfdbfe; padding:10px 14px; font-size:0.82rem; color:#1e40af; font-weight:700; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-wand-magic-sparkles" style="font-size:1.1rem; color:#2563eb;"></i>
+        <span>Admission Numbers do not need to be provided in the spreadsheet — the system automatically assigns unique official Admission Numbers (e.g. <code>SRS-2026-1025</code>) to each enrolled student.</span>
+      </div>
+      <table class="custom-table" style="font-size:12px; margin:0;">
+        <thead>
+          <tr style="background:#1e293b; color:#fff;">
+            <th style="color:#fff;">Column Header</th>
+            <th style="color:#fff;">Required?</th>
+            <th style="color:#fff;">Sample Value</th>
+            <th style="color:#fff;">Description & Validation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Roll_No</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>1, 2, 3</code></td>
+            <td>Class Roll Number (defaults to sequential number)</td>
+          </tr>
+          <tr>
+            <td><code>Class_Name</code></td>
+            <td><span class="badge badge-pending">Mandatory</span></td>
+            <td><code>Class 1, Class 6, Nursery</code></td>
+            <td>Class name. If the class doesn't exist yet, it will be automatically created.</td>
+          </tr>
+          <tr>
+            <td><code>Section_Name</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>A, B, C</code></td>
+            <td>Section name (defaults to 'A' if left blank).</td>
+          </tr>
+          <tr>
+            <td><code>First_Name</code></td>
+            <td><span class="badge badge-pending">Mandatory</span></td>
+            <td><code>Aarav, Priya</code></td>
+            <td>Student's first name.</td>
+          </tr>
+          <tr>
+            <td><code>Last_Name</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>Sharma, Verma</code></td>
+            <td>Student's last name.</td>
+          </tr>
+          <tr>
+            <td><code>Gender</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>Male / Female / Other</code></td>
+            <td>Student gender (defaults to Male if blank).</td>
+          </tr>
+          <tr>
+            <td><code>Date_of_Birth</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>2018-05-15</code></td>
+            <td>Date of birth (YYYY-MM-DD or DD/MM/YYYY).</td>
+          </tr>
+          <tr>
+            <td><code>Blood_Group</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>B+, A+, O+, AB+</code></td>
+            <td>Blood group.</td>
+          </tr>
+          <tr>
+            <td><code>Parent_Name</code></td>
+            <td><span class="badge badge-pending">Mandatory</span></td>
+            <td><code>Rajesh Sharma</code></td>
+            <td>Father or guardian's full name.</td>
+          </tr>
+          <tr>
+            <td><code>Parent_Phone</code></td>
+            <td><span class="badge badge-pending">Mandatory</span></td>
+            <td><code>9812345670</code></td>
+            <td>Primary contact phone number.</td>
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td><strong><code>Student_Aadhaar</code></strong></td>
+            <td><span class="badge" style="background:#dcfce7; color:#166534; font-weight:700;">Optional</span></td>
+            <td><code>456789123456</code></td>
+            <td>12-digit valid Aadhaar card number of the student.</td>
+          </tr>
+          <tr style="background:#f0fdf4;">
+            <td><strong><code>Parent_Aadhaar</code></strong></td>
+            <td><span class="badge" style="background:#dcfce7; color:#166534; font-weight:700;">Optional</span></td>
+            <td><code>987654321012</code></td>
+            <td>12-digit valid Aadhaar card number of the parent / guardian.</td>
+          </tr>
+          <tr>
+            <td><code>Residential_Address</code></td>
+            <td><span class="badge" style="background:#f1f5f9; color:#475569;">Optional</span></td>
+            <td><code>Sector 62, Noida, UP</code></td>
+            <td>Full residential address of the student.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function downloadCustomTemplate(fmt) {
+    const classId = document.getElementById('templateClassSelect').value;
+    let url = "{% url 'student_excel_template' %}?format=" + fmt;
+    if (classId) {
+      url += "&class_id=" + classId;
+    }
+    window.location.href = url;
+  }
+
+  function handleFileSelect(input) {
+    if (input.files && input.files[0]) {
+      const file = input.files[0];
+      document.getElementById('fileNameText').innerText = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+      document.getElementById('selectedFileName').style.display = 'block';
+      document.getElementById('dropZone').style.borderColor = '#2563eb';
+      document.getElementById('dropZone').style.background = '#eff6ff';
+    }
+  }
+</script>
+{% endblock %}

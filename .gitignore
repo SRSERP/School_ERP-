@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3-journal
+db.sqlite3.bak*
+
+# Backups & Archives
+*.zip
+*.tar.gz
+*.bak
+
+# Staticfiles build cache
+staticfiles/
+
+# IDE / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Passenger / Hosting temporary files
+tmp/
+stderr.log
+passenger_wsgi_orig.py

@@ -1,0 +1,184 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Bulk Marksheets - {{ class_level.name }} ({{ exam.name }}){% endblock %}
+{% block page_title %}Bulk Academic Report Cards: {{ class_level.name }}{% endblock %}
+
+{% block header_actions %}
+<div class="btn-no-print" style="display:flex; gap:10px; align-items:center;">
+  <a href="{% url 'exam_list' %}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-arrow-left"></i> Back to Exams
+  </a>
+  <button type="button" onclick="window.print()" class="btn btn-primary btn-sm" style="background:#0f172a; border-color:#0f172a; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-print"></i> 🖨️ Print All ({{ total_students }} Marksheets)
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+@media print {
+  body { background:#ffffff !important; }
+  .btn-no-print, header, aside, nav, .sidebar-footer { display:none !important; }
+  .main-content { margin:0 !important; padding:0 !important; }
+  .bulk-report-page {
+    page-break-after: always !important;
+    break-after: page !important;
+    border: 2px solid #0f172a !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 1.5rem !important;
+    min-height: 98vh;
+    box-sizing: border-box;
+  }
+}
+</style>
+
+<div class="btn-no-print" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 18px; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+  <div style="font-size:0.9rem; color:#334155;">
+    Showing <strong>{{ total_students }}</strong> Student Marksheets for <strong>{{ class_level.name }}</strong> ({{ exam.name }}).
+    <span style="color:#64748b; font-size:0.82rem; display:block;">Each student's marksheet automatically starts on a fresh page when printed.</span>
+  </div>
+  <button type="button" onclick="window.print()" class="btn btn-primary btn-sm" style="font-weight:700;">
+    <i class="fa-solid fa-print"></i> Print Entire Class
+  </button>
+</div>
+
+<div style="max-width:980px; margin:0 auto; display:flex; flex-direction:column; gap:2rem;">
+  {% for card in student_cards %}
+  <div class="bulk-report-page" style="background:#ffffff; border:2px solid #0f172a; border-radius:12px; padding:2rem; box-shadow:0 4px 15px rgba(0,0,0,0.05); position:relative;">
+    
+    <!-- Top School Masthead -->
+    <div style="border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start; gap:14px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        {% if school.logo %}
+        <img src="{{ school.logo.url }}" alt="{{ school.name }}" style="max-height:60px; max-width:120px; object-fit:contain;">
+        {% else %}
+        <div style="width:58px; height:58px; border-radius:10px; background:#0f172a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.6rem; font-weight:900;">
+          SRS
+        </div>
+        {% endif %}
+        <div>
+          <h1 style="font-size:1.35rem; font-weight:900; color:#0f172a; margin:0 0 2px 0; text-transform:uppercase; letter-spacing:0.5px; line-height:1.2;">
+            {{ school.name }}
+          </h1>
+          <div style="font-size:0.75rem; color:#334155; font-weight:600;">
+            Affiliated to {{ school.board|default:"CBSE" }} • Affil No: <strong>{{ school.affiliation_number }}</strong> • School Code: <strong>{{ school.school_code }}</strong>
+          </div>
+          <div style="font-size:0.72rem; color:#64748b;">
+            {{ school.address }} • Ph: {{ school.phone }}
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:right; flex-shrink:0;">
+        <div style="border:1.5px solid #0f172a; border-radius:6px; padding:4px 10px; background:#f8fafc; text-align:center;">
+          <span style="font-size:0.68rem; font-weight:800; color:#475569; text-transform:uppercase; display:block;">Session</span>
+          <strong style="font-size:0.9rem; color:#0f172a;">{{ school.academic_year }}</strong>
+        </div>
+        <div style="font-size:0.7rem; color:#64748b; margin-top:3px; font-weight:600;">
+          Roll #{{ card.student.roll_number }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Title Bar -->
+    <div style="text-align:center; background:#1e1b4b; color:#fff; padding:5px 0; border-radius:4px; font-weight:800; font-size:0.9rem; letter-spacing:0.05em; text-transform:uppercase; margin-bottom:1rem;">
+      Academic Performance Report Card - {{ exam.name }}
+    </div>
+
+    <!-- Student Bio Data Header -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; margin-bottom:1rem; font-size:0.82rem;">
+      <div>
+        <p style="margin:0 0 4px 0;"><strong>Student Name:</strong> <span style="font-weight:800; color:#0f172a; font-size:0.92rem;">{{ card.student.full_name }}</span></p>
+        <p style="margin:0 0 4px 0;"><strong>Admission No:</strong> {{ card.student.admission_number }}</p>
+        <p style="margin:0;"><strong>Class & Section:</strong> {{ card.student.class_level.name }} - Section {{ card.student.section.name }}</p>
+      </div>
+      <div>
+        <p style="margin:0 0 4px 0;"><strong>Father / Guardian:</strong> {{ card.student.parent_name }}</p>
+        <p style="margin:0 0 4px 0;"><strong>Date of Birth:</strong> {{ card.student.dob|date:"d M Y" }}</p>
+        <p style="margin:0;"><strong>Attendance Record:</strong> {{ card.attendance_stats.percentage }}% ({{ card.attendance_stats.present }}/{{ card.attendance_stats.total }} Days)</p>
+      </div>
+    </div>
+
+    <!-- Marks Breakdown Table -->
+    <table class="custom-table" style="margin-bottom:1rem; border:1px solid #cbd5e1; font-size:0.84rem; width:100%;">
+      <thead>
+        <tr style="background:#0f172a; color:#ffffff;">
+          <th style="color:#ffffff; padding:6px 10px;">Subject Code</th>
+          <th style="color:#ffffff; padding:6px 10px;">Subject Name</th>
+          <th style="color:#ffffff; text-align:center; padding:6px 10px;">Max Marks</th>
+          <th style="color:#ffffff; text-align:center; padding:6px 10px;">Marks Scored</th>
+          <th style="color:#ffffff; text-align:center; padding:6px 10px;">Grade</th>
+          <th style="color:#ffffff; padding:6px 10px;">Teacher Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in card.results %}
+        <tr style="border-bottom:1px solid #e2e8f0;">
+          <td style="padding:6px 10px;"><code>{{ r.subject.code }}</code></td>
+          <td style="padding:6px 10px;"><strong style="color:#0f172a;">{{ r.subject.name }}</strong></td>
+          <td style="text-align:center; padding:6px 10px;">{{ r.max_marks|floatformat:0 }}</td>
+          <td style="text-align:center; font-weight:800; color:var(--primary); padding:6px 10px;">{{ r.marks_obtained }}</td>
+          <td style="text-align:center; padding:6px 10px;">
+            <span class="badge" style="background:#dcfce7; color:#166534; font-weight:800; font-size:0.78rem;">{{ r.grade }}</span>
+          </td>
+          <td style="padding:6px 10px; font-size:0.8rem; color:#475569;">{{ r.remarks }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" style="text-align:center; padding:1.25rem; color:#94a3b8;">No subject marks recorded for this examination.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f1f5f9; font-weight:800; font-size:0.88rem;">
+          <td colspan="2" style="text-align:right; padding:6px 10px;">Grand Total:</td>
+          <td style="text-align:center; padding:6px 10px;">{{ card.total_max|floatformat:0 }}</td>
+          <td style="text-align:center; color:#065f46; font-size:0.95rem; padding:6px 10px;">{{ card.total_obtained }}</td>
+          <td style="text-align:center; color:var(--primary); font-size:0.95rem; padding:6px 10px;">{{ card.overall_grade }}</td>
+          <td style="padding:6px 10px;">Overall: <strong>{{ card.overall_percentage }}%</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <!-- Result Verdict & Signatures -->
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:2rem; padding-top:1rem; border-top:1px dashed #cbd5e1;">
+      <div>
+        <div style="font-size:0.82rem; color:#334155; margin-bottom:4px;">
+          Result Status: <strong style="color:{% if card.overall_grade == 'F' %}#dc2626{% else %}#166534{% endif %}; font-size:0.95rem;">{{ card.verdict }}</strong>
+        </div>
+        <div style="font-size:0.75rem; color:#64748b;">
+          Grading Scale: A+ (90%+), A (80-89%), B (70-79%), C (60-69%), D (50-59%), F (&lt;50%)
+        </div>
+      </div>
+
+      <!-- Signatures -->
+      <div style="display:flex; gap:36px; text-align:center;">
+        <div>
+          <div style="height:36px; border-bottom:1px solid #0f172a; width:130px; margin-bottom:4px;"></div>
+          <span style="font-size:0.75rem; font-weight:700; color:#475569; display:block;">Class Teacher</span>
+        </div>
+        <div>
+          {% if school.principal_signature %}
+          <div style="height:36px; display:flex; align-items:flex-end; justify-content:center; margin-bottom:4px;">
+            <img src="{{ school.principal_signature.url }}" alt="Signature" style="max-height:34px; max-width:110px;">
+          </div>
+          {% else %}
+          <div style="height:36px; border-bottom:1px solid #0f172a; width:130px; margin-bottom:4px;"></div>
+          {% endif %}
+          <span style="font-size:0.75rem; font-weight:700; color:#475569; display:block;">Principal / Stamp</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  {% empty %}
+  <div class="card-panel" style="text-align:center; padding:3rem; color:#94a3b8;">
+    <i class="fa-solid fa-users-slash" style="font-size:3rem; margin-bottom:1rem; color:#cbd5e1;"></i>
+    <h3>No Enrolled Students Found</h3>
+    <p>No active students are currently registered in this class.</p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

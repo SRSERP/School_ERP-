@@ -1,0 +1,144 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Daily Attendance{% endblock %}
+{% block page_title %}Daily Student Attendance Register{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'attendance_report' %}" class="btn btn-secondary btn-sm">
+  <i class="fa-solid fa-chart-column"></i> Monthly Register Report
+</a>
+{% endblock %}
+
+{% block content %}
+<!-- Filter & Selection Bar (Strictly Single Horizontal Line) -->
+<form method="GET" class="filter-bar" style="display:flex; align-items:center; gap:12px; flex-wrap:nowrap; background:#ffffff; padding:10px 16px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:1.5rem; overflow-x:auto;">
+  <div style="font-weight:700; color:#1e293b; display:flex; align-items:center; gap:8px; white-space:nowrap; flex-shrink:0;">
+    <i class="fa-solid fa-clipboard-user" style="color:var(--primary);"></i> Select Class & Date:
+  </div>
+
+  <div style="width:170px; flex-shrink:0;">
+    <select name="class_id" class="form-select" data-placeholder="Select Class" style="width:100%;" onchange="this.form.submit()">
+      {% for c in classes %}
+      <option value="{{ c.id }}" {% if selected_class.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="width:160px; flex-shrink:0;">
+    <select name="section_id" class="form-select" data-placeholder="Select Section" style="width:100%;" onchange="this.form.submit()">
+      {% for sec in selected_class.sections.all %}
+      <option value="{{ sec.id }}" {% if selected_section.id == sec.id %}selected{% endif %}>Section {{ sec.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="width:160px; flex-shrink:0;">
+    <input type="date" name="date" value="{{ current_date }}" class="form-input" style="height:38px; width:100%; box-sizing:border-box;" onchange="this.form.submit()">
+  </div>
+
+  <button type="submit" class="btn btn-secondary btn-sm" style="height:38px; padding:0 16px; font-weight:700; flex-shrink:0; white-space:nowrap;">
+    <i class="fa-solid fa-arrow-rotate-right"></i> Load
+  </button>
+</form>
+
+<div class="card-panel">
+  <div class="card-header">
+    <h3>
+      <i class="fa-solid fa-calendar-day" style="color:var(--secondary);"></i>
+      Register: {{ selected_class.name }} - Section {{ selected_section.name }} ({{ current_date }})
+    </h3>
+    <div style="display:flex; gap:10px;">
+      <button type="button" onclick="markAll('Present')" class="btn btn-outline btn-sm">
+        <i class="fa-solid fa-check-double" style="color:green;"></i> Mark All Present
+      </button>
+      <button type="button" onclick="markAll('Absent')" class="btn btn-outline btn-sm">
+        <i class="fa-solid fa-xmark" style="color:red;"></i> Mark All Absent
+      </button>
+    </div>
+  </div>
+
+  <form method="POST">
+    {% csrf_token %}
+    <input type="hidden" name="class_id" value="{{ selected_class.id }}">
+    <input type="hidden" name="section_id" value="{{ selected_section.id }}">
+    <input type="hidden" name="date" value="{{ current_date }}">
+
+    <div class="table-responsive">
+      <table class="custom-table">
+        <thead>
+          <tr>
+            <th>Roll No</th>
+            <th>Adm No</th>
+            <th>Student Name</th>
+            <th style="text-align:center;">Present (P)</th>
+            <th style="text-align:center;">Absent (A)</th>
+            <th style="text-align:center;">Late (L)</th>
+            <th style="text-align:center;">Excused (E)</th>
+            <th>Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in student_rows %}
+          <tr>
+            <td><strong style="color:var(--primary);">#{{ row.student.roll_number }}</strong></td>
+            <td>{{ row.student.admission_number }}</td>
+            <td>
+              <strong style="color:#0f172a;">{{ row.student.full_name }}</strong>
+            </td>
+            
+            <td style="text-align:center;">
+              <label style="cursor:pointer; display:inline-block; padding:4px 8px; border-radius:4px;" class="status-lbl">
+                <input type="radio" name="status_{{ row.student.id }}" value="Present" class="att-radio radio-present" {% if row.status == 'Present' %}checked{% endif %}>
+              </label>
+            </td>
+            
+            <td style="text-align:center;">
+              <label style="cursor:pointer; display:inline-block; padding:4px 8px; border-radius:4px;" class="status-lbl">
+                <input type="radio" name="status_{{ row.student.id }}" value="Absent" class="att-radio radio-absent" {% if row.status == 'Absent' %}checked{% endif %}>
+              </label>
+            </td>
+
+            <td style="text-align:center;">
+              <label style="cursor:pointer; display:inline-block; padding:4px 8px; border-radius:4px;" class="status-lbl">
+                <input type="radio" name="status_{{ row.student.id }}" value="Late" class="att-radio radio-late" {% if row.status == 'Late' %}checked{% endif %}>
+              </label>
+            </td>
+
+            <td style="text-align:center;">
+              <label style="cursor:pointer; display:inline-block; padding:4px 8px; border-radius:4px;" class="status-lbl">
+                <input type="radio" name="status_{{ row.student.id }}" value="Excused" class="att-radio radio-excused" {% if row.status == 'Excused' %}checked{% endif %}>
+              </label>
+            </td>
+
+            <td>
+              <input type="text" name="remarks_{{ row.student.id }}" placeholder="Optional note..." class="form-input" style="padding:4px 8px; font-size:0.8rem;">
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" style="text-align:center; padding:2rem; color:#94a3b8;">
+              No students enrolled in this section.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if student_rows %}
+    <div style="padding:1.5rem; background:#f8fafc; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end;">
+      <button type="submit" name="save_attendance" class="btn btn-primary" style="padding:10px 28px;">
+        <i class="fa-solid fa-floppy-disk"></i> Save Attendance Register
+      </button>
+    </div>
+    {% endif %}
+  </form>
+</div>
+
+<script>
+  function markAll(status) {
+    const selector = status === 'Present' ? '.radio-present' : '.radio-absent';
+    document.querySelectorAll(selector).forEach(radio => radio.checked = true);
+  }
+</script>
+{% endblock %}

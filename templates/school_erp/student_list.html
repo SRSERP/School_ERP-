@@ -1,0 +1,192 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Student Directory{% endblock %}
+{% block page_title %}Students Information System (SIS){% endblock %}
+
+{% block header_actions %}{% endblock %}
+
+{% block content %}
+<!-- Search & Filter Bar (Single Horizontal Line) -->
+<form method="GET" class="filter-bar" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#ffffff; padding:12px 16px; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:1.25rem;">
+  <div class="search-box" style="flex:1; min-width:220px; display:flex; align-items:center; gap:8px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:6px 14px; height:38px; box-sizing:border-box;">
+    <i class="fa-solid fa-magnifying-glass" style="color:#94a3b8; font-size:0.95rem;"></i>
+    <input type="text" name="q" value="{{ search_query }}" placeholder="Search by Student Name, Admission No, Parent Phone..." style="border:none; background:transparent; outline:none; width:100%; font-size:0.88rem; color:#0f172a;">
+  </div>
+
+  <div style="width:150px; flex-shrink:0;">
+    <select name="class_id" class="form-select" data-placeholder="All Classes" style="width:100%;">
+      <option value="">All Classes</option>
+      {% for c in classes %}
+      <option value="{{ c.id }}" {% if selected_class == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="width:145px; flex-shrink:0;">
+    <select name="section_id" class="form-select" data-placeholder="All Sections" style="width:100%;">
+      <option value="">All Sections</option>
+      {% for sec in sections %}
+      <option value="{{ sec.id }}" {% if selected_section == sec.id|stringformat:"s" %}selected{% endif %}>Sec {{ sec.name }} ({{ sec.class_level.code }})</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+    <a href="?{% if selected_class %}class_id={{ selected_class }}&{% endif %}{% if selected_section %}section_id={{ selected_section }}&{% endif %}fee_filter=due" class="btn btn-sm {% if selected_fee_filter == 'due' %}btn-primary{% else %}btn-outline{% endif %}" style="padding:4px 9px; font-size:0.75rem; font-weight:700; color:{% if selected_fee_filter == 'due' %}#fff{% else %}#dc2626{% endif %}; border-color:#fca5a5;">
+      Pending Dues
+    </a>
+    <a href="?{% if selected_class %}class_id={{ selected_class }}&{% endif %}{% if selected_section %}section_id={{ selected_section }}&{% endif %}fee_filter=cleared" class="btn btn-sm {% if selected_fee_filter == 'cleared' %}btn-primary{% else %}btn-outline{% endif %}" style="padding:4px 9px; font-size:0.75rem; font-weight:700; color:{% if selected_fee_filter == 'cleared' %}#fff{% else %}#16a34a{% endif %}; border-color:#86efac;">
+      Cleared
+    </a>
+    <a href="?{% if selected_class %}class_id={{ selected_class }}&{% endif %}{% if selected_section %}section_id={{ selected_section }}&{% endif %}gender=Male" class="btn btn-sm {% if selected_gender == 'Male' %}btn-primary{% else %}btn-outline{% endif %}" style="padding:4px 9px; font-size:0.75rem; font-weight:600;">
+      Boys
+    </a>
+    <a href="?{% if selected_class %}class_id={{ selected_class }}&{% endif %}{% if selected_section %}section_id={{ selected_section }}&{% endif %}gender=Female" class="btn btn-sm {% if selected_gender == 'Female' %}btn-primary{% else %}btn-outline{% endif %}" style="padding:4px 9px; font-size:0.75rem; font-weight:600;">
+      Girls
+    </a>
+  </div>
+
+  <div style="display:flex; gap:6px; align-items:center;">
+    <button type="submit" class="btn btn-secondary btn-sm" style="height:38px; padding:0 14px; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+      <i class="fa-solid fa-filter"></i> Filter
+    </button>
+    {% if search_query or selected_class or selected_section or selected_gender or selected_fee_filter %}
+    <a href="{% url 'student_list' %}" class="btn btn-outline btn-sm" style="height:38px; line-height:36px; padding:0 10px; font-weight:600;">Reset</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Students Table Panel -->
+<div class="card-panel">
+  <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:1.1rem 1.5rem; background:#ffffff; border-bottom:1px solid #e2e8f0;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-user-graduate" style="color:#2563eb;"></i> Enrolled Students Directory
+      </h3>
+      <span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700; border:1px solid #bfdbfe; font-size:0.78rem; padding:4px 10px; border-radius:12px;">
+        {{ total_count }} Students Found
+      </span>
+    </div>
+
+    <!-- Student Action Buttons Fixed In Table Header -->
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <a href="{% url 'student_bulk_promote' %}" class="btn btn-sm" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; padding:7px 13px; border-radius:8px; text-decoration:none;">
+        <i class="fa-solid fa-graduation-cap" style="color:#2563eb; font-size:0.95rem;"></i> Move to Next Session
+      </a>
+      <a href="{% url 'student_excel_template' %}" class="btn btn-secondary btn-sm" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; background:#f8fafc; border:1px solid #cbd5e1; color:#0f172a; padding:7px 13px; border-radius:8px; text-decoration:none;">
+        <i class="fa-solid fa-file-excel" style="color:#059669; font-size:0.95rem;"></i> Excel Template
+      </a>
+      <a href="{% url 'student_bulk_upload' %}" class="btn btn-sm" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; background:#f5f3ff; border:1px solid #ddd6fe; color:#6d28d9; padding:7px 13px; border-radius:8px; text-decoration:none;">
+        <i class="fa-solid fa-cloud-arrow-up" style="color:#7c3aed; font-size:0.95rem;"></i> Bulk Upload (Excel / CSV)
+      </a>
+      <a href="{% url 'student_create' %}" class="btn btn-primary btn-sm" style="font-weight:700; display:inline-flex; align-items:center; gap:6px; background:#2563eb; border:1px solid #2563eb; color:#ffffff; padding:7px 16px; border-radius:8px; box-shadow:0 2px 5px rgba(37,99,235,0.25); text-decoration:none;">
+        <i class="fa-solid fa-user-plus"></i> + New Admission
+      </a>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <!-- Shifted Actions Column to Left Side with Freeze / Sticky styling -->
+          <th class="freeze-action-col" style="width:215px; text-align:center;">Actions</th>
+          <th>Adm No</th>
+          <th>Roll No</th>
+          <th>Student Name</th>
+          <th>Gender</th>
+          <th>Class & Section</th>
+          <th>Parent / Guardian</th>
+          <th>Contact Number</th>
+          <th>Fee Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr>
+          <td class="freeze-action-col" style="text-align:center;">
+            <div style="display:inline-flex; gap:5px; align-items:center; justify-content:center;">
+              <a href="{% url 'student_detail' s.pk %}" class="btn btn-primary btn-sm" title="View Official Admission Forma" style="font-weight:700; font-size:0.78rem; padding:4px 9px; display:inline-flex; align-items:center; gap:4px; text-decoration:none; background:#2563eb; border-color:#2563eb; color:#ffffff;">
+                <i class="fa-solid fa-file-lines"></i> Forma
+              </a>
+              <a href="{% url 'student_promote' s.pk %}" class="btn btn-outline btn-sm" title="Move to Next Session" style="padding:4px 8px; font-size:0.8rem; color:#7c3aed; border-color:#c4b5fd; text-decoration:none;">
+                <i class="fa-solid fa-graduation-cap"></i>
+              </a>
+              <a href="{% url 'student_id_card' s.pk %}" class="btn btn-outline btn-sm" title="Print ID Card" style="padding:4px 8px; font-size:0.8rem; color:#2563eb; text-decoration:none;">
+                <i class="fa-solid fa-id-badge"></i>
+              </a>
+              <a href="{% url 'student_edit' s.pk %}" class="btn btn-outline btn-sm" title="Edit Student" style="padding:4px 8px; font-size:0.8rem; color:#0f172a; text-decoration:none;">
+                <i class="fa-regular fa-pen-to-square"></i>
+              </a>
+            </div>
+          </td>
+          <td><strong style="color:var(--primary);">{{ s.admission_number }}</strong></td>
+          <td><span class="badge" style="background:#f1f5f9; color:#1e293b;">#{{ s.roll_number }}</span></td>
+          <td>
+            <div style="font-weight:700; color:#0f172a;">{{ s.full_name }}</div>
+            <div style="font-size:0.75rem; color:#64748b;">
+              DOB: {{ s.dob|date:"d M Y" }} ({{ s.blood_group }})
+              {% if s.student_aadhaar %}
+              • <span style="color:#059669; font-weight:700;"><i class="fa-solid fa-id-card"></i> Aadhaar: {{ s.student_aadhaar }}</span>
+              {% endif %}
+            </div>
+          </td>
+          <td>{{ s.gender }}</td>
+          <td><strong>{{ s.class_level.name }}</strong> - {{ s.section.name }}</td>
+          <td>{{ s.parent_name }} ({{ s.parent_relation }})</td>
+          <td>
+            <i class="fa-solid fa-phone" style="font-size:0.7rem; color:#64748b;"></i> {{ s.parent_phone }}
+          </td>
+          <td>
+            {% if s.fee_due_amount > 0 %}
+            <span class="badge badge-unpaid">Due: {{ school.currency_symbol }}{{ s.fee_due_amount|floatformat:0 }}</span>
+            {% else %}
+            <span class="badge badge-paid">All Cleared</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" style="text-align:center; padding: 3rem 1rem; color:#94a3b8;">
+            <i class="fa-solid fa-user-graduate" style="font-size: 2.5rem; color:#cbd5e1; margin-bottom:10px; display:block;"></i>
+            No student records found matching the filter criteria.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination Footer -->
+  {% if page_obj.paginator.num_pages > 1 %}
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:1rem 1.5rem; background:#ffffff; border-top:1px solid #e2e8f0;">
+    <div style="font-size:0.85rem; color:#64748b; font-weight:500;">
+      Showing <strong>{{ page_obj.start_index }} - {{ page_obj.end_index }}</strong> of <strong>{{ total_count }}</strong> Students (Page <strong>{{ page_obj.number }}</strong> of <strong>{{ page_obj.paginator.num_pages }}</strong>)
+    </div>
+    <div style="display:flex; gap:6px; align-items:center;">
+      {% if page_obj.has_previous %}
+        <a href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_section %}&section_id={{ selected_section }}{% endif %}" class="btn btn-outline btn-sm" style="font-weight:600;"><i class="fa-solid fa-angles-left"></i> First</a>
+        <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_section %}&section_id={{ selected_section }}{% endif %}" class="btn btn-outline btn-sm" style="font-weight:600;"><i class="fa-solid fa-angle-left"></i> Previous</a>
+      {% endif %}
+
+      {% for num in page_obj.paginator.page_range %}
+        {% if page_obj.number == num %}
+          <span class="btn btn-primary btn-sm" style="font-weight:700; min-width:34px; text-align:center; pointer-events:none; background:#2563eb; color:#fff;">{{ num }}</span>
+        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+          <a href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_section %}&section_id={{ selected_section }}{% endif %}" class="btn btn-outline btn-sm" style="min-width:34px; text-align:center;">{{ num }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_section %}&section_id={{ selected_section }}{% endif %}" class="btn btn-outline btn-sm" style="font-weight:600;">Next <i class="fa-solid fa-angle-right"></i></a>
+        <a href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if selected_class %}&class_id={{ selected_class }}{% endif %}{% if selected_section %}&section_id={{ selected_section }}{% endif %}" class="btn btn-outline btn-sm" style="font-weight:600;">Last <i class="fa-solid fa-angles-right"></i></a>
+      {% endif %}
+    </div>
+  </div>
+  {% elif total_count > 0 %}
+  <div style="padding:0.75rem 1.5rem; background:#fafafa; border-top:1px solid #f1f5f9; font-size:0.82rem; color:#64748b;">
+    Showing all <strong>{{ total_count }}</strong> students
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Report Card - {{ student.full_name }} ({{ exam.name }}) - {{ school.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f1f5f9; color: #0f172a; padding: 20px 12px 60px 12px; }
+    .public-page-wrapper { max-width: 840px; margin: 0 auto; }
+    .top-action-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; background: #0f172a; color: #fff; padding: 12px 20px; border-radius: 12px; margin-bottom: 16px; }
+    .action-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 0.85rem; font-weight: 700; border-radius: 8px; cursor: pointer; text-decoration: none; border: none; }
+    .btn-print { background: #2563eb; color: #fff; }
+    .btn-wa { background: #22c55e; color: #fff; }
+    .btn-copy { background: #334155; color: #fff; }
+    .slip-card { background: #fff; border: 2px solid #0f172a; border-radius: 12px; padding: 26px 30px; }
+    .slip-masthead { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 12px; margin-bottom: 14px; }
+    .slip-masthead h1 { font-size: 1.4rem; font-weight: 900; text-transform: uppercase; color: #0f172a; }
+    .custom-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    .custom-table th { background: #0f172a; color: #fff; padding: 8px 12px; text-align: left; font-size: 0.82rem; }
+    .custom-table td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.88rem; }
+    .custom-table tr:nth-child(even) { background: #f8fafc; }
+    @media print {
+      @page { size: A4 portrait; margin: 6mm 8mm; }
+      body { background: #fff !important; padding: 0 !important; }
+      .top-action-bar, .no-print { display: none !important; }
+      .slip-card { border: 2px solid #000 !important; box-shadow: none !important; padding: 12px 16px !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="public-page-wrapper">
+  
+  <div class="top-action-bar no-print">
+    <div style="font-weight:800; display:flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-graduation-cap" style="color:#60a5fa;"></i>
+      <span>Official Academic Report Card</span>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button onclick="window.print()" class="action-btn btn-print"><i class="fa-solid fa-print"></i> Print Marksheet</button>
+      {% if clean_parent_phone %}
+      <a href="https://api.whatsapp.com/send?phone={{ clean_parent_phone }}&text={{ wa_message|urlencode }}" target="_blank" class="action-btn btn-wa">
+        <i class="fa-brands fa-whatsapp"></i> WhatsApp
+      </a>
+      {% endif %}
+      <button onclick="navigator.clipboard.writeText(window.location.href); alert('Link Copied!');" class="action-btn btn-copy">
+        <i class="fa-regular fa-copy"></i> Copy Link
+      </button>
+    </div>
+  </div>
+
+  <div class="slip-card">
+    <div class="slip-masthead">
+      {% if school.logo %}
+      <img src="{{ school.logo.url }}" alt="{{ school.name }}" style="max-height:55px; max-width:120px; object-fit:contain; margin-bottom:6px;">
+      {% endif %}
+      <h1>{{ school.name }}</h1>
+      <p style="font-size:0.82rem; font-weight:600; color:#334155;">{{ school.tagline }}</p>
+      <p style="font-size:0.75rem; color:#64748b;">
+        Affiliated to {{ school.board|default:"CBSE" }} &bull; Affiliation No: {{ school.affiliation_number }} &bull; School Code: {{ school.school_code }}
+      </p>
+      <p style="font-size:0.72rem; color:#64748b;">{{ school.address }} &bull; Ph: {{ school.phone }}</p>
+    </div>
+
+    <div style="text-align:center; background:#0f172a; color:#fff; padding:6px 0; border-radius:4px; font-weight:800; font-size:0.95rem; text-transform:uppercase; margin-bottom:14px;">
+      Academic Performance Report Card &bull; {{ exam.name }} (Session {{ school.academic_year }})
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:16px; font-size:0.85rem;">
+      <div>
+        <p style="margin-bottom:4px;"><strong>Student Name:</strong> <span style="font-weight:800; color:#0f172a; font-size:0.95rem;">{{ student.full_name }}</span></p>
+        <p style="margin-bottom:4px;"><strong>Admission No:</strong> {{ student.admission_number }}</p>
+        <p style="margin-bottom:4px;"><strong>Class & Section:</strong> {{ student.class_level.name }} - Section {{ student.section.name }}</p>
+        <p style="margin-bottom:4px;"><strong>Roll Number:</strong> #{{ student.roll_number }}</p>
+      </div>
+      <div>
+        <p style="margin-bottom:4px;"><strong>Father / Guardian:</strong> {{ student.parent_name }}</p>
+        <p style="margin-bottom:4px;"><strong>Date of Birth:</strong> {{ student.dob|date:"d F Y" }}</p>
+        <p style="margin-bottom:4px;"><strong>Blood Group:</strong> {{ student.blood_group }}</p>
+        <p style="margin-bottom:4px;"><strong>Attendance Record:</strong> {{ attendance_stats.percentage }}%</p>
+      </div>
+    </div>
+
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <th>Subject</th>
+          <th style="width:110px; text-align:center;">Max Marks</th>
+          <th style="width:120px; text-align:center;">Marks Scored</th>
+          <th style="width:90px; text-align:center;">Grade</th>
+          <th>Remarks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td><strong>{{ r.subject.name }}</strong> ({{ r.subject.code }})</td>
+          <td style="text-align:center;">{{ r.max_marks|floatformat:0 }}</td>
+          <td style="text-align:center; font-weight:800; color:#0f172a;">{{ r.marks_obtained|floatformat:1 }}</td>
+          <td style="text-align:center;"><span style="font-weight:800; color:#2563eb;">{{ r.grade }}</span></td>
+          <td style="font-size:0.8rem; color:#475569;">{{ r.remarks|default:"Good performance" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f1f5f9; font-weight:800;">
+          <td>GRAND TOTAL</td>
+          <td style="text-align:center;">{{ total_max|floatformat:0 }}</td>
+          <td style="text-align:center; font-size:1.05rem; color:#0f172a;">{{ total_obtained|floatformat:1 }}</td>
+          <td style="text-align:center; color:#2563eb;">{{ overall_grade }}</td>
+          <td style="color:#166534;">{{ overall_percentage }}% ({{ verdict }})</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:28px; padding-top:14px; border-top:1.5px solid #0f172a;">
+      <div style="font-size:0.75rem; color:#64748b;">
+        Official Academic Record &bull; Generated from {{ school.short_name }} ERP
+      </div>
+      <div style="display:flex; gap:36px; text-align:center;">
+        <div>
+          <div style="height:32px; border-bottom:1px solid #0f172a; width:120px; margin-bottom:3px;"></div>
+          <span style="font-size:0.75rem; font-weight:700;">Class Teacher</span>
+        </div>
+        <div>
+          {% if school.principal_signature %}
+          <div style="height:32px; display:flex; align-items:flex-end; justify-content:center; margin-bottom:3px;">
+            <img src="{{ school.principal_signature.url }}" alt="Signature" style="max-height:30px; max-width:90px;">
+          </div>
+          {% else %}
+          <div style="height:32px; border-bottom:1px solid #0f172a; width:120px; margin-bottom:3px;"></div>
+          {% endif %}
+          <span style="font-size:0.75rem; font-weight:700;">Principal / Seal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

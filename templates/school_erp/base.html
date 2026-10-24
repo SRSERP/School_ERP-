@@ -1,0 +1,462 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}SRS School ERP{% endblock %} | School Management System</title>
+  <link rel="icon" type="image/png" href="data:image/png;base64,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">
+  <link rel="shortcut icon" type="image/x-icon" href="/static/favicon.ico">
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- SRS School ERP Stylesheet -->
+  <link rel="stylesheet" href="{% static 'school_erp/css/style.css' %}">
+
+  <!-- jQuery & Select2 (Searchable Dropdowns) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+  <style>
+    @media print {
+      .btn-no-print, .no-print, .filter-bar, form.filter-bar,
+      aside, .sidebar, .sidebar-overlay, .sidebar-footer,
+      header, .topbar, .mobile-toggle-btn, .session-switcher-container,
+      .alert-box, .messages-container {
+        display: none !important;
+      }
+      html, body {
+        background: #ffffff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .main-wrapper {
+        margin-left: 0 !important;
+        padding: 0 !important;
+      }
+      .content-body, .main-content {
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+    }
+  </style>
+  {% block extra_css %}{% endblock %}
+<body>
+  <!-- Mobile Sidebar Overlay Backdrop -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <div class="brand-section">
+        {% if school.logo %}
+        <div class="brand-logo-img" style="width:42px; height:42px; border-radius:10px; overflow:hidden; background:#ffffff; display:flex; align-items:center; justify-content:center; flex-shrink:0; padding:2px; border:1px solid rgba(255,255,255,0.2);">
+          <img src="{{ school.logo.url }}" alt="{{ school.name }}" style="max-width:100%; max-height:100%; object-fit:contain;">
+        </div>
+        {% else %}
+        <div class="brand-logo-icon">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        {% endif %}
+        <div class="brand-info">
+          <h2 title="{{ school.name }}">{{ school.short_name|default:school.name|truncatechars:18 }}</h2>
+          <span>{{ school.school_code|default:"Enterprise Portal" }}</span>
+        </div>
+      </div>
+
+      <ul class="nav-menu">
+        <li class="nav-header">Overview</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+          <a href="{% url 'dashboard' %}">
+            <span class="nav-icon"><i class="fa-solid fa-chart-pie"></i></span>
+            <span>Dashboard</span>
+          </a>
+        </li>
+
+        {% if user_perms.can_manage_students %}
+        <li class="nav-header">Students & Admissions</li>
+        <li class="nav-item {% if 'student' in request.resolver_match.url_name and request.resolver_match.url_name != 'student_create' and 'promote' not in request.resolver_match.url_name %}active{% endif %}">
+          <a href="{% url 'student_list' %}">
+            <span class="nav-icon"><i class="fa-solid fa-user-graduate"></i></span>
+            <span>Student Directory</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'student_create' %}active{% endif %}">
+          <a href="{% url 'student_create' %}">
+            <span class="nav-icon"><i class="fa-solid fa-user-plus"></i></span>
+            <span>New Admission</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'student_bulk_promote' %}active{% endif %}">
+          <a href="{% url 'student_bulk_promote' %}">
+            <span class="nav-icon"><i class="fa-solid fa-graduation-cap"></i></span>
+            <span>Move to Next Session</span>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user_perms.can_manage_users %}
+        <li class="nav-header">Staff & Faculty</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'teacher_list' or request.resolver_match.url_name == 'teacher_create' or request.resolver_match.url_name == 'teacher_detail' or request.resolver_match.url_name == 'teacher_edit' %}active{% endif %}">
+          <a href="{% url 'teacher_list' %}">
+            <span class="nav-icon"><i class="fa-solid fa-chalkboard-user"></i></span>
+            <span>Faculty Directory</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'teacher_portal' %}active{% endif %}">
+          <a href="{% url 'teacher_portal' %}">
+            <span class="nav-icon"><i class="fa-solid fa-user-clock"></i></span>
+            <span>Teacher Workspace Portal</span>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user_perms.can_manage_classes or user_perms.can_manage_timetable or user_perms.can_manage_attendance %}
+        <li class="nav-header">Academics & Daily</li>
+        {% if user_perms.can_manage_classes %}
+        <li class="nav-item {% if request.resolver_match.url_name == 'classes' %}active{% endif %}">
+          <a href="{% url 'classes' %}">
+            <span class="nav-icon"><i class="fa-solid fa-school"></i></span>
+            <span>Classes & Sections</span>
+          </a>
+        </li>
+        {% endif %}
+        {% if user_perms.can_manage_timetable %}
+        <li class="nav-item {% if request.resolver_match.url_name == 'timetable' %}active{% endif %}">
+          <a href="{% url 'timetable' %}">
+            <span class="nav-icon"><i class="fa-solid fa-calendar-days"></i></span>
+            <span>Timetable Routine</span>
+          </a>
+        </li>
+        {% endif %}
+        {% if user_perms.can_manage_attendance %}
+        <li class="nav-item {% if 'attendance' in request.resolver_match.url_name %}active{% endif %}">
+          <a href="{% url 'attendance' %}">
+            <span class="nav-icon"><i class="fa-solid fa-clipboard-check"></i></span>
+            <span>Daily Attendance</span>
+          </a>
+        </li>
+        {% endif %}
+        {% endif %}
+
+        {% if user_perms.can_manage_fees %}
+        <li class="nav-header">Finance & Accounts</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fees_dashboard' or request.resolver_match.url_name == 'fees_dashboard_alias' %}active{% endif %}">
+          <a href="{% url 'fees_dashboard' %}">
+            <span class="nav-icon"><i class="fa-solid fa-chart-pie" style="color:#38bdf8;"></i></span>
+            <span>Fees Dashboard</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fee_counter' %}active{% endif %}">
+          <a href="{% url 'fee_counter' %}">
+            <span class="nav-icon"><i class="fa-solid fa-cash-register"></i></span>
+            <span>Fee Collection Counter</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'class_fee_master' %}active{% endif %}">
+          <a href="{% url 'class_fee_master' %}">
+            <span class="nav-icon"><i class="fa-solid fa-sliders"></i></span>
+            <span>Class Fee Master</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fees_defaulters' %}active{% endif %}">
+          <a href="{% url 'fees_defaulters' %}">
+            <span class="nav-icon"><i class="fa-solid fa-users-slash"></i></span>
+            <span>Pending Dues / Defaulters</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fees_list' %}active{% endif %}">
+          <a href="{% url 'fees_list' %}">
+            <span class="nav-icon"><i class="fa-solid fa-receipt"></i></span>
+            <span>Fee Invoices & Ledger</span>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user_perms.can_manage_exams %}
+        <li class="nav-header">Examinations</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'exam_list' %}active{% endif %}">
+          <a href="{% url 'exam_list' %}">
+            <span class="nav-icon"><i class="fa-solid fa-award"></i></span>
+            <span>Exams & Marksheets</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'marks_entry' %}active{% endif %}">
+          <a href="{% url 'marks_entry' %}">
+            <span class="nav-icon"><i class="fa-solid fa-pen-to-square"></i></span>
+            <span>Enter Marks</span>
+          </a>
+        </li>
+        {% endif %}
+
+        <li class="nav-header">Reports & Analytics</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'reports_hub' %}active{% endif %}">
+          <a href="{% url 'reports_hub' %}">
+            <span class="nav-icon"><i class="fa-solid fa-chart-line"></i></span>
+            <span>Smart Reports Hub</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'attendance_report' %}active{% endif %}">
+          <a href="{% url 'attendance_report' %}">
+            <span class="nav-icon"><i class="fa-solid fa-clipboard-user"></i></span>
+            <span>Attendance Summary</span>
+          </a>
+        </li>
+
+        {% if user_perms.can_manage_users or request.user.is_superuser %}
+        <li class="nav-header">Communication</li>
+        <li class="nav-item {% if 'notice' in request.resolver_match.url_name %}active{% endif %}">
+          <a href="{% url 'notices' %}">
+            <span class="nav-icon"><i class="fa-solid fa-bullhorn"></i></span>
+            <span>Notice Board</span>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user_perms.can_manage_sessions %}
+        <li class="nav-header">Session Management</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'academic_sessions_manage' %}active{% endif %}">
+          <a href="{% url 'academic_sessions_manage' %}">
+            <span class="nav-icon"><i class="fa-solid fa-calendar-plus"></i></span>
+            <span>Academic Sessions</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'student_bulk_promote' %}active{% endif %}">
+          <a href="{% url 'student_bulk_promote' %}">
+            <span class="nav-icon"><i class="fa-solid fa-arrow-right-arrow-left"></i></span>
+            <span>Student Promotion</span>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user_perms.can_manage_users %}
+        <li class="nav-header">Staff & Permissions</li>
+        <li class="nav-item {% if 'user' in request.resolver_match.url_name and request.resolver_match.url_name != 'user_login' %}active{% endif %}">
+          <a href="{% url 'user_list' %}">
+            <span class="nav-icon"><i class="fa-solid fa-users-gear"></i></span>
+            <span>User Registration & Permissions</span>
+          </a>
+        </li>
+        {% endif %}
+        
+        <!-- School Profile & Settings -->
+        {% if user_perms.can_manage_users %}
+        <li class="nav-header">Configuration</li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'school_settings' %}active{% endif %}">
+          <a href="{% url 'school_settings' %}">
+            <span class="nav-icon"><i class="fa-solid fa-sliders"></i></span>
+            <span>School Profile & Logo</span>
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+
+      <div class="sidebar-footer">
+        {% if request.user.is_authenticated %}
+        <div class="admin-pill" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:10px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div class="admin-avatar" style="background:#2563eb; color:#ffffff; font-weight:700; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; border:2px solid rgba(255,255,255,0.2);">
+              {{ request.user.username|slice:":2"|upper }}
+            </div>
+            <div class="admin-meta">
+              <h4 style="margin:0; font-size:13px; font-weight:600; color:#f8fafc;">{{ request.user.first_name|default:request.user.username }}</h4>
+              <p style="margin:0; font-size:11px; color:#94a3b8;">{{ current_user_role }}</p>
+            </div>
+          </div>
+          <a href="{% url 'user_logout' %}" title="Logout" style="color:#f87171; font-size:16px; padding:6px; border-radius:6px; text-decoration:none; display:flex; align-items:center; justify-content:center; transition:all 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.2)'" onmouseout="this.style.background='transparent'">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </a>
+        </div>
+        {% else %}
+        <div class="admin-pill" style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px 12px; background:rgba(255,255,255,0.05); border-radius:10px;">
+          <div class="admin-meta">
+            <h4 style="margin:0; font-size:13px; font-weight:600; color:#f8fafc;">SRS School ERP</h4>
+            <p style="margin:0; font-size:11px; color:#94a3b8;">Guest Access</p>
+          </div>
+          <a href="{% url 'user_login' %}" style="display:inline-flex; align-items:center; gap:5px; padding:5px 12px; background:#2563eb; color:#ffffff; border-radius:6px; font-size:12px; font-weight:600; text-decoration:none;">
+            <i class="fa-solid fa-right-to-bracket"></i> Login
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="main-wrapper">
+      {% if is_platform_superadmin and request.session.saas_active_school_id %}
+      <!-- Super Admin Viewing Specific Tenant -->
+      <div class="btn-no-print no-print" style="background:linear-gradient(90deg, #1e1b4b, #2563eb); color:#ffffff; padding:8px 24px; font-size:12px; font-weight:700; display:flex; justify-content:space-between; align-items:center; z-index:100; box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+        <div>
+          <i class="fa-solid fa-shield-halved" style="color:#f59e0b; margin-right:8px; font-size:14px;"></i>
+          Super Admin Viewing Tenant School: <strong style="color:#fef08a; font-size:13px;">{{ school.name }} ({{ school.school_code }})</strong>
+        </div>
+        <a href="{% url 'saas_admin_dashboard' %}" style="background:rgba(255,255,255,0.2); color:#fff; text-decoration:none; padding:4px 12px; border-radius:6px; font-size:11.5px; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+          <i class="fa-solid fa-crown" style="color:#f59e0b;"></i> Back to SaaS Platform Admin
+        </a>
+      </div>
+      {% endif %}
+
+      {% if subscription_expiring_soon %}
+      <!-- Subscription Expiring Soon Alert Banner -->
+      <div class="btn-no-print no-print" style="background:#fffbeb; border-bottom:2px solid #f59e0b; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:#92400e; z-index:90;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size:16px; color:#d97706;"></i>
+          <span><strong>Subscription Renewal Alert:</strong> Your school ERP monthly subscription (₹{{ school.subscription_monthly_fee|floatformat:0 }}/month) expires in <strong>{{ subscription_days_left }} days</strong> (on {{ school.subscription_end_date|date:"d M Y" }}). Please renew to prevent service disruption.</span>
+        </div>
+        {% if is_platform_superadmin %}
+        <a href="{% url 'saas_admin_dashboard' %}" class="btn-primary" style="padding:4px 12px; font-size:12px; text-decoration:none; background:#d97706; border-color:#d97706; border-radius:6px; font-weight:700;">Renew Now</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- Top Sticky Header -->
+      <header class="topbar">
+        <div class="topbar-left" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <!-- Mobile Sidebar Hamburger Toggle -->
+          <button type="button" class="mobile-toggle-btn" id="mobileSidebarToggle" title="Open Navigation Menu" aria-label="Toggle Navigation">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+
+          <h1 class="page-title" style="margin:0;">
+            {% block page_title %}Dashboard Overview{% endblock %}
+          </h1>
+
+          <!-- Session Switcher Dropdown & Create Option -->
+          <div class="session-switcher-container" style="display:inline-flex; align-items:center; gap:8px;">
+            <form action="{% url 'switch_academic_session' %}" method="POST" id="headerSessionForm" style="margin:0; display:inline-flex; align-items:center;">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <div style="position:relative; display:inline-flex; align-items:center;">
+                <span style="position:absolute; left:12px; pointer-events:none; color:#2563eb; font-size:13px; z-index:2;">
+                  <i class="fa-regular fa-calendar-check"></i>
+                </span>
+                <select name="session_id" id="headerAcademicSessionSelect" onchange="document.getElementById('headerSessionForm').submit()" class="no-select2"
+                        title="Switch Academic Session"
+                        style="appearance:none; -webkit-appearance:none; padding:7px 32px 7px 34px; background:#eff6ff; border:1.5px solid #bfdbfe; border-radius:30px; font-size:13px; font-weight:700; color:#1e40af; cursor:pointer; outline:none; transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1); box-shadow:0 1px 3px rgba(37,99,235,0.08);">
+                  {% for s in all_academic_sessions %}
+                  <option value="{{ s.id }}" {% if active_session and active_session.id == s.id %}selected{% endif %}>
+                    Session: {{ s.name }} {% if s.is_current %}(Default){% endif %}
+                  </option>
+                  {% empty %}
+                  <option value="">No Session Found</option>
+                  {% endfor %}
+                </select>
+                <span style="position:absolute; right:12px; pointer-events:none; color:#1e40af; font-size:11px; z-index:2;">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </span>
+              </div>
+            </form>
+
+            {% if user_perms.can_manage_sessions %}
+            <a href="{% url 'academic_sessions_manage' %}" class="btn-new-session" title="Manage / Create Academic Sessions"
+               style="display:inline-flex; align-items:center; gap:6px; padding:6px 13px; background:#ffffff; border:1.5px solid #d1d5db; border-radius:20px; font-size:12px; font-weight:600; color:#374151; text-decoration:none; box-shadow:0 1px 2px rgba(0,0,0,0.05); transition:all 0.15s ease;"
+               onmouseover="this.style.borderColor='#2563eb'; this.style.color='#2563eb';"
+               onmouseout="this.style.borderColor='#d1d5db'; this.style.color='#374151';">
+              <i class="fa-solid fa-plus" style="color:#2563eb; font-size:11px;"></i>
+              <span>New Session</span>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="topbar-date">
+            <i class="fa-regular fa-calendar"></i>
+            <span id="liveClock">{% now "D, d M Y" %}</span>
+          </div>
+          {% block header_actions %}{% endblock %}
+        </div>
+      </header>
+
+      <!-- Main Body -->
+      <main class="content-body">
+        {% if messages %}
+        <div class="messages-box">
+          {% for message in messages %}
+          <div class="alert-box alert-{{ message.tags }}">
+            <span><i class="fa-solid fa-circle-info"></i> {{ message }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {% block extra_js %}{% endblock %}
+
+  <!-- Global Searchable Select2 Initialization Script -->
+  <script>
+    $(document).ready(function() {
+      function applySearchableSelects() {
+        $('select:not(.no-select2)').each(function() {
+          var $select = $(this);
+          if ($select.hasClass('select2-hidden-accessible')) {
+            return;
+          }
+
+          var firstOpt = $select.find('option[value=""]').first();
+          if (!firstOpt.length) {
+            firstOpt = $select.find('option:first');
+          }
+          var defaultPlaceholder = (firstOpt.length && firstOpt.text().trim()) ? firstOpt.text().trim() : 'Search or Select...';
+          var placeholderText = $select.data('placeholder') || defaultPlaceholder;
+
+          $select.select2({
+            width: '100%',
+            dropdownAutoWidth: false,
+            placeholder: placeholderText,
+            allowClear: false,
+            language: {
+              noResults: function() {
+                return "No matches found";
+              }
+            }
+          });
+
+          // Forward change events for inline onchange attributes
+          $select.on('select2:select', function(e) {
+            if (this.onchange) {
+              this.onchange();
+            }
+          });
+        });
+      }
+
+      applySearchableSelects();
+
+      // Ensure dynamic selects (like AJAX or injected rows) also get Select2
+      if (window.MutationObserver) {
+        var observer = new MutationObserver(function(mutations) {
+          applySearchableSelects();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+
+      // Mobile Sidebar Navigation Drawer Toggle
+      var sidebar = document.querySelector('.sidebar');
+      var overlay = document.getElementById('sidebarOverlay');
+      var toggleBtn = document.getElementById('mobileSidebarToggle');
+      if (toggleBtn && sidebar && overlay) {
+        toggleBtn.addEventListener('click', function() {
+          sidebar.classList.toggle('active');
+          overlay.classList.toggle('active');
+        });
+        overlay.addEventListener('click', function() {
+          sidebar.classList.remove('active');
+          overlay.classList.remove('active');
+        });
+      }
+    });
+  </script>
+</body>
+</html>

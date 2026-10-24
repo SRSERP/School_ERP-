@@ -1,0 +1,173 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Faculty Profile - {{ teacher.full_name }}{% endblock %}
+{% block page_title %}Faculty & Staff Profile{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:8px;">
+  <a href="{% url 'teacher_portal' %}?teacher_id={{ teacher.id }}" class="btn btn-outline btn-sm" style="font-weight:700; color:#4338ca; border-color:#c7d2fe;">
+    <i class="fa-solid fa-chalkboard-user"></i> Workspace Portal
+  </a>
+  <a href="{% url 'teacher_edit' teacher.pk %}" class="btn btn-primary btn-sm" style="font-weight:700;">
+    <i class="fa-regular fa-pen-to-square"></i> Edit Faculty
+  </a>
+  <a href="{% url 'teacher_list' %}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-arrow-left"></i> All Faculty
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="display:grid; grid-template-columns: 360px 1fr; gap:1.5rem; align-items:start;">
+
+  <!-- Left: Faculty Profile Card -->
+  <div style="display:flex; flex-direction:column; gap:1.25rem;">
+    <div class="card-panel" style="padding:1.75rem; text-align:center;">
+      <div style="width:84px; height:84px; border-radius:50%; background:linear-gradient(135deg, #4f46e5, #7c3aed); color:#ffffff; font-size:2.2rem; font-weight:800; display:flex; align-items:center; justify-content:center; margin:0 auto 1rem; box-shadow:0 10px 25px rgba(79,70,229,0.25);">
+        {{ teacher.first_name|slice:":1" }}
+      </div>
+      <h2 style="font-size:1.35rem; font-weight:800; color:#0f172a; margin:0 0 4px;">{{ teacher.full_name }}</h2>
+      <div style="color:#4f46e5; font-weight:700; font-size:0.92rem; margin-bottom:8px;">{{ teacher.designation }}</div>
+      <div style="display:flex; justify-content:center; gap:6px; flex-wrap:wrap; margin-bottom:1.25rem;">
+        <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:700;">{{ teacher.department }}</span>
+        <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:700;">ID: {{ teacher.employee_id }}</span>
+        {% if teacher.is_active %}
+        <span class="badge badge-active">Active</span>
+        {% else %}
+        <span class="badge badge-inactive">Inactive</span>
+        {% endif %}
+      </div>
+
+      <div style="border-top:1px solid #e2e8f0; padding-top:1rem; text-align:left; font-size:0.88rem; display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:#64748b;"><i class="fa-solid fa-graduation-cap" style="width:20px; color:#4f46e5;"></i> Qualification:</span>
+          <strong style="color:#0f172a;">{{ teacher.qualification }}</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:#64748b;"><i class="fa-solid fa-calendar-day" style="width:20px; color:#4f46e5;"></i> Joining Date:</span>
+          <strong style="color:#0f172a;">{{ teacher.joining_date|date:"d M Y" }}</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:#64748b;"><i class="fa-solid fa-venus-mars" style="width:20px; color:#4f46e5;"></i> Gender:</span>
+          <strong style="color:#0f172a;">{{ teacher.gender }}</strong>
+        </div>
+        {% if teacher.dob %}
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:#64748b;"><i class="fa-solid fa-cake-candles" style="width:20px; color:#4f46e5;"></i> DOB:</span>
+          <strong style="color:#0f172a;">{{ teacher.dob|date:"d M Y" }}</strong>
+        </div>
+        {% endif %}
+        <div style="display:flex; justify-content:space-between;">
+          <span style="color:#64748b;"><i class="fa-solid fa-indian-rupee-sign" style="width:20px; color:#4f46e5;"></i> Monthly Salary:</span>
+          <strong style="color:#059669;">₹{{ teacher.salary|floatformat:2 }}</strong>
+        </div>
+        <div style="border-top:1px dashed #e2e8f0; padding-top:8px;">
+          <div style="color:#64748b; margin-bottom:4px;"><i class="fa-solid fa-phone" style="width:20px; color:#4f46e5;"></i> Contact:</div>
+          <div style="font-weight:700; color:#0f172a; padding-left:24px;">{{ teacher.phone }}</div>
+        </div>
+        <div>
+          <div style="color:#64748b; margin-bottom:4px;"><i class="fa-regular fa-envelope" style="width:20px; color:#4f46e5;"></i> Email:</div>
+          <div style="font-weight:600; color:#2563eb; padding-left:24px; word-break:break-all;">{{ teacher.email }}</div>
+        </div>
+        {% if teacher.address %}
+        <div>
+          <div style="color:#64748b; margin-bottom:4px;"><i class="fa-solid fa-location-dot" style="width:20px; color:#4f46e5;"></i> Address:</div>
+          <div style="color:#334155; padding-left:24px; font-size:0.84rem;">{{ teacher.address }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Assigned Class Teacher Section -->
+    <div class="card-panel" style="padding:1.25rem;">
+      <h3 style="font-size:1rem; font-weight:800; color:#0f172a; margin:0 0 10px; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-chalkboard" style="color:#059669;"></i> Class Teacher Assignment
+      </h3>
+      {% if managed_sections %}
+        {% for sec in managed_sections %}
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:800; color:#166534; font-size:0.95rem;">{{ sec.class_level.name }} - Sec {{ sec.name }}</div>
+            <div style="font-size:0.78rem; color:#15803d;">Room: {{ sec.room_number }} • {{ sec.student_count }} Enrolled Students</div>
+          </div>
+          <a href="{% url 'attendance' %}?class_id={{ sec.class_level.id }}&section_id={{ sec.id }}" class="btn btn-sm" style="background:#059669; color:#fff; font-size:0.75rem; font-weight:700; padding:4px 10px; text-decoration:none; border-radius:6px;">
+            Attendance
+          </a>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="font-size:0.84rem; color:#94a3b8; margin:0;">Currently not assigned as Class Teacher for any section.</p>
+      {% endif %}
+    </div>
+
+    <!-- Subjects Taught -->
+    <div class="card-panel" style="padding:1.25rem;">
+      <h3 style="font-size:1rem; font-weight:800; color:#0f172a; margin:0 0 10px; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-book-open" style="color:#2563eb;"></i> Subjects Taught
+      </h3>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for subj in teacher.subjects_taught.all %}
+        <span class="badge" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-size:0.82rem; padding:5px 10px; font-weight:700;">
+          {{ subj.name }} ({{ subj.code }})
+        </span>
+        {% empty %}
+        <span style="font-size:0.84rem; color:#94a3b8;">No specific subjects mapped yet.</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Weekly Teaching Schedule (Timetable) -->
+  <div class="card-panel" style="padding:1.5rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:1.25rem; border-bottom:1px solid #e2e8f0; padding-bottom:1rem;">
+      <div>
+        <h3 style="font-size:1.15rem; font-weight:800; color:#0f172a; margin:0; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-calendar-week" style="color:#4f46e5;"></i> Weekly Routine Schedule
+        </h3>
+        <p style="font-size:0.82rem; color:#64748b; margin:2px 0 0;">Total allocated periods: <strong>{{ total_periods }} periods/week</strong></p>
+      </div>
+      <a href="{% url 'timetable' %}" class="btn btn-outline btn-sm" style="font-weight:600;">
+        <i class="fa-solid fa-calendar-days"></i> Master Timetable
+      </a>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:1.25rem;">
+      {% for d in schedule_days %}
+      <div style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+        <div style="background:#f8fafc; padding:8px 16px; border-bottom:1px solid #e2e8f0; font-weight:800; font-size:0.88rem; color:#0f172a; display:flex; justify-content:space-between; align-items:center;">
+          <span><i class="fa-regular fa-clock" style="color:#4f46e5; margin-right:6px;"></i> {{ d.day }}</span>
+          <span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:0.75rem;">
+            {{ d.count }} Periods
+          </span>
+        </div>
+
+        <div style="padding:12px;">
+          {% if d.periods %}
+          <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:10px;">
+            {% for item in d.periods %}
+            <div style="background:#ffffff; border:1px solid #cbd5e1; border-left:4px solid #4f46e5; border-radius:8px; padding:10px 12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span class="badge" style="background:#f1f5f9; color:#0f172a; font-weight:800; font-size:0.75rem;">Period {{ item.period_number }}</span>
+                <span style="font-size:0.75rem; color:#64748b; font-weight:600;">{{ item.start_time|time:"H:i" }} - {{ item.end_time|time:"H:i" }}</span>
+              </div>
+              <div style="font-weight:800; color:#0f172a; font-size:0.92rem;">{{ item.subject.name }}</div>
+              <div style="font-size:0.8rem; color:#475569; margin-top:2px;">
+                <strong>{{ item.class_level.name }}</strong> - Sec {{ item.section.name }}
+              </div>
+              <div style="font-size:0.72rem; color:#94a3b8; margin-top:3px;">
+                <i class="fa-solid fa-door-open"></i> {{ item.room_number }}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div style="color:#94a3b8; font-size:0.84rem; text-align:center; padding:8px;">No scheduled periods on {{ d.day }}.</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

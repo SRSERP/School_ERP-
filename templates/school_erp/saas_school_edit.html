@@ -1,0 +1,181 @@
+{% extends 'school_erp/saas_base.html' %}
+{% load static %}
+
+{% block title %}Edit School • {{ school.name }} • SaaS Platform Admin{% endblock %}
+{% block page_title %}
+  <a href="{% url 'saas_admin_dashboard' %}" style="color:#64748b; text-decoration:none; font-size:16px; margin-right:8px;" title="Back to Dashboard">
+    <i class="fa-solid fa-arrow-left"></i>
+  </a>
+  <i class="fa-solid fa-pen-to-square" style="color:#2563eb; margin-right:8px;"></i> Edit School Profile & Baseline: {{ school.name }}
+{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; align-items:center; gap:10px;">
+  <a href="{% url 'saas_switch_school' school.id %}" class="btn btn-secondary" title="View this school ERP">
+    <i class="fa-solid fa-arrow-up-right-from-square"></i> Enter School ERP
+  </a>
+  <a href="{% url 'saas_admin_dashboard' %}" class="btn btn-secondary">
+    <i class="fa-solid fa-xmark"></i> Back to Dashboard
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 0 auto;">
+
+  <!-- Edit Header Summary Card -->
+  <div style="background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color:#ffffff; border-radius:16px; padding:24px 28px; margin-bottom:24px; box-shadow:0 10px 25px rgba(15,23,42,0.15); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+    <div>
+      <span style="background:rgba(59,130,246,0.3); color:#93c5fd; padding:4px 10px; border-radius:20px; font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; display:inline-block; margin-bottom:8px;">
+        Tenant Code: {{ school.school_code }}
+      </span>
+      <h2 style="font-family:'Outfit',sans-serif; font-size:22px; font-weight:800; margin:0 0 6px 0; color:#fff;">
+        {{ school.name }}
+      </h2>
+      <p style="margin:0; font-size:13.5px; color:#cbd5e1;">
+        Status: 
+        {% if school.is_active %}
+          <span style="color:#86efac; font-weight:700;"><i class="fa-solid fa-circle-check"></i> Active</span>
+        {% else %}
+          <span style="color:#fca5a5; font-weight:700;"><i class="fa-solid fa-circle-xmark"></i> Deactivated / Suspended</span>
+        {% endif %}
+        &bull; Days Remaining: <strong>{{ school.days_remaining }} Days</strong>
+        &bull; Current Plan: <strong>₹{{ school.subscription_monthly_fee|floatformat:0 }}/mo</strong>
+      </p>
+    </div>
+    <div style="text-align:right;">
+      <a href="{% url 'saas_admin_dashboard' %}" class="btn btn-secondary btn-sm" style="background:rgba(255,255,255,0.15); color:#fff; border-color:rgba(255,255,255,0.25);">
+        <i class="fa-solid fa-arrow-left"></i> Return to Table
+      </a>
+    </div>
+  </div>
+
+  <form method="POST" action="{% url 'saas_school_edit' school.id %}" id="editSchoolForm">
+    {% csrf_token %}
+
+    <!-- SECTION 1: BASIC INFORMATION -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:22px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          1
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">School Identity & General Profile</h3>
+          <span style="font-size:12px; color:#64748b;">Update official school credentials, board, and contact data</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">Full Official School Name *</label>
+          <input type="text" name="name" value="{{ school.name }}" class="form-input" required>
+        </div>
+        <div>
+          <label class="form-label">Short Display Name</label>
+          <input type="text" name="short_name" value="{{ school.short_name }}" class="form-input">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">School Code (Unique) *</label>
+          <input type="text" name="school_code" value="{{ school.school_code }}" class="form-input" style="text-transform:uppercase; font-weight:700;" required>
+        </div>
+        <div>
+          <label class="form-label">Education Board</label>
+          <input type="text" name="board" value="{{ school.board|default:'CBSE' }}" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Affiliation Number</label>
+          <input type="text" name="affiliation_number" value="{{ school.affiliation_number|default:'' }}" class="form-input">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">Official Email</label>
+          <input type="email" name="email" value="{{ school.email|default:'' }}" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Contact Phone</label>
+          <input type="text" name="phone" value="{{ school.phone|default:'' }}" class="form-input">
+        </div>
+        <div>
+          <label class="form-label">Principal / Director Name</label>
+          <input type="text" name="principal_name" value="{{ school.principal_name|default:'' }}" class="form-input">
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">Complete Postal Campus Address (Prints on Slips)</label>
+        <textarea name="address" class="form-textarea" rows="2">{{ school.address|default:'' }}</textarea>
+      </div>
+    </div>
+
+    <!-- SECTION 2: ANCHOR SESSION LOCK -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:22px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#fffbeb; color:#d97706; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          2
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">
+            <i class="fa-solid fa-lock" style="color:#d97706; font-size:13px; margin-right:4px;"></i> Anchor Academic Session Baseline Lock
+          </h3>
+          <span style="font-size:12px; color:#64748b;">The school is restricted to creating sessions forward from this baseline date only.</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <div>
+          <label class="form-label">Registration Anchor Session Name</label>
+          <input type="text" name="registered_session_name" value="{{ school.registered_session_name|default:'2026-2027' }}" class="form-input" style="font-weight:700; color:#1e40af;">
+        </div>
+        <div>
+          <label class="form-label">Baseline Session Start Date (Cutoff Date)</label>
+          <input type="date" name="registered_session_start_date" value="{{ school.registered_session_start_date|date:'Y-m-d'|default:'2026-04-01' }}" class="form-input" style="font-weight:700;">
+        </div>
+      </div>
+    </div>
+
+    <!-- SECTION 3: SUBSCRIPTION & MONTHLY BILLING -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#ecfdf5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          3
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">
+            <i class="fa-solid fa-circle-dollar-to-slot" style="color:#059669; font-size:13px; margin-right:4px;"></i> Subscription & Monthly Billing Plan
+          </h3>
+          <span style="font-size:12px; color:#64748b;">Monthly charges and subscription expiration date</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <div>
+          <label class="form-label">Monthly Subscription Fee (₹)</label>
+          <input type="number" step="0.01" name="subscription_monthly_fee" value="{{ school.subscription_monthly_fee|floatformat:2 }}" class="form-input" style="font-weight:800; color:#059669;">
+        </div>
+        <div>
+          <label class="form-label">Subscription Valid Until (Expiry Date)</label>
+          <input type="date" name="subscription_end_date" value="{{ school.subscription_end_date|date:'Y-m-d'|default:'' }}" class="form-input" style="font-weight:700;">
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:20px 28px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,0.03);">
+      <a href="{% url 'saas_admin_dashboard' %}" class="btn btn-secondary" style="font-weight:700;">
+        <i class="fa-solid fa-arrow-left"></i> Cancel & Back
+      </a>
+
+      <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-weight:800; padding:12px 32px; font-size:14px; box-shadow:0 4px 14px rgba(37,99,235,0.3);">
+        <i class="fa-solid fa-check-circle" style="font-size:16px;"></i> Save All Changes
+      </button>
+    </div>
+
+  </form>
+
+</div>
+{% endblock %}

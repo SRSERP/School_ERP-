@@ -1,0 +1,712 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Class Timetable - {{ selected_class.name|default:"Academics" }} - SRS School ERP{% endblock %}
+{% block page_title %}Academic Timetable & Routine{% endblock %}
+
+{% block header_actions %}
+<div class="btn-no-print" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+  {% if user_perms.can_manage_timetable %}
+  <button type="button" onclick="openAddPeriodModal()" class="btn btn-primary btn-sm" style="background:#2563eb; border-color:#2563eb; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-plus"></i> Add Period Slot
+  </button>
+  <button type="button" onclick="openModal('generateRoutineModal')" class="btn btn-secondary btn-sm" style="background:#475569; border-color:#475569; color:#fff; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-wand-magic-sparkles"></i> ⚡ Auto-Generate Routine
+  </button>
+  {% endif %}
+  <button type="button" onclick="window.print()" class="btn btn-dark btn-sm" style="background:#0f172a; border-color:#0f172a; color:#fff; font-weight:800; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-print"></i> 🖨️ Print Timetable
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+/* Print Styles for Official Timetable */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm 10mm;
+  }
+  
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 9.5pt !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Strictly Hide All Navbars, Forms, Buttons, Footers, Modals, Action Buttons */
+  .btn-no-print, .no-print, .filter-bar, form, header, aside, nav,
+  .sidebar, .topbar, .sidebar-overlay, .sidebar-footer,
+  .saas-impersonation-banner, [class*="impersonation"],
+  .modal-backdrop, .period-actions, button, .btn, input, select {
+    display: none !important;
+  }
+  
+  .main-wrapper, .content-body, .main-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+  
+  .card-panel {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+  
+  .timetable-print-sheet {
+    border: 2px solid #0f172a !important;
+    padding: 1rem !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+    background: #ffffff !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .print-only-block {
+    display: block !important;
+  }
+
+  .day-row-card {
+    border: 1px solid #0f172a !important;
+    break-inside: avoid !important;
+    margin-bottom: 6px !important;
+  }
+
+  .period-slot-box {
+    border: 1px solid #475569 !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+  }
+
+  .print-footer-signatures {
+    display: flex !important;
+    justify-content: space-between !important;
+    margin-top: 1rem !important;
+    padding-top: 8px !important;
+    border-top: 1.5px solid #0f172a !important;
+  }
+}
+
+.period-slot-box {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+.period-slot-box:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+  background: #ffffff;
+}
+.period-slot-box:hover .period-actions {
+  opacity: 1;
+  visibility: visible;
+}
+.period-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+@media (hover: none) {
+  .period-actions {
+    opacity: 1;
+  }
+}
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+</style>
+
+<!-- Class & Section Selector (Strictly Hidden on Print) -->
+<form method="GET" class="filter-bar btn-no-print no-print" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; background:#ffffff; padding:12px 18px; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:1.5rem; box-shadow:0 2px 6px rgba(0,0,0,0.02);">
+  <div style="font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px; white-space:nowrap;">
+    <i class="fa-solid fa-calendar-week" style="color:var(--primary); font-size:1.1rem;"></i> Class Routine:
+  </div>
+  
+  <div style="min-width:180px;">
+    <select name="class_id" class="form-select" style="width:100%; margin:0;" onchange="this.form.submit()">
+      {% for c in classes %}
+      <option value="{{ c.id }}" {% if selected_class.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width:170px;">
+    <select name="section_id" class="form-select" style="width:100%; margin:0;" onchange="this.form.submit()">
+      {% for sec in selected_class.sections.all %}
+      <option value="{{ sec.id }}" {% if selected_section.id == sec.id %}selected{% endif %}>Section {{ sec.name }} ({{ sec.room_number }})</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <button type="submit" class="btn btn-primary btn-sm" style="height:38px; padding:0 18px; font-weight:700;">
+    <i class="fa-solid fa-arrow-rotate-right"></i> Load Routine
+  </button>
+
+  <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+    <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; padding:6px 12px; border-radius:20px; font-size:0.8rem; border:1px solid #bae6fd;">
+      <i class="fa-solid fa-clock-rotate-left"></i> {{ total_periods_count }} Periods Configured
+    </span>
+  </div>
+</form>
+
+{% if total_periods_count == 0 %}
+<!-- Notice when routine is currently empty -->
+<div class="btn-no-print no-print" style="background:linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%); border:1px solid #93c5fd; border-radius:12px; padding:1.25rem 1.5rem; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
+  <div style="display:flex; align-items:center; gap:12px;">
+    <div style="width:42px; height:42px; border-radius:50%; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0;">
+      <i class="fa-solid fa-lightbulb"></i>
+    </div>
+    <div>
+      <h4 style="margin:0 0 2px 0; color:#1e3a8a; font-weight:800; font-size:1.05rem;">No Routine Configured for {{ selected_class.name }} (Section {{ selected_section.name }})</h4>
+      <p style="margin:0; font-size:0.85rem; color:#3b82f6;">
+        Aap auto-generate button par click karke 1-click me standard 6 periods (Monday - Saturday) generate kar sakte hain, ya individual period add kar sakte hain.
+      </p>
+    </div>
+  </div>
+  <div style="display:flex; gap:10px;">
+    {% if user_perms.can_manage_timetable %}
+    <button type="button" onclick="openModal('generateRoutineModal')" class="btn btn-primary btn-sm" style="background:#2563eb; border-color:#2563eb; font-weight:800; padding:8px 16px;">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> ⚡ Auto-Generate Routine
+    </button>
+    <button type="button" onclick="openAddPeriodModal()" class="btn btn-outline btn-sm" style="background:#fff; border-color:#2563eb; color:#2563eb; font-weight:700; padding:8px 16px;">
+      <i class="fa-solid fa-plus"></i> + Add First Period
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- OFFICIAL PRINTABLE TIMETABLE SHEET -->
+<div class="timetable-print-sheet" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; padding:1.75rem 2rem; box-shadow:0 4px 15px rgba(0,0,0,0.04);">
+  
+  <!-- School Official Masthead -->
+  <div class="print-only-block" style="border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start; gap:14px;">
+    <div style="display:flex; align-items:center; gap:14px;">
+      {% if school.logo %}
+      <img src="{{ school.logo.url }}" alt="{{ school.name }}" style="max-height:60px; max-width:120px; object-fit:contain;">
+      {% else %}
+      <div style="width:58px; height:58px; border-radius:10px; background:#0f172a; color:#fff; display:flex; align-items:center; justify-content:center; font-size:1.6rem; font-weight:900; flex-shrink:0;">
+        SRS
+      </div>
+      {% endif %}
+      <div>
+        <h1 style="font-size:1.35rem; font-weight:900; color:#0f172a; margin:0 0 2px 0; text-transform:uppercase; letter-spacing:0.5px; line-height:1.2;">
+          {{ school.name }}
+        </h1>
+        <div style="font-size:0.75rem; color:#334155; font-weight:600;">
+          Affiliated to {{ school.board|default:"CBSE" }} • Affiliation No: <strong>{{ school.affiliation_number }}</strong> • School Code: <strong>{{ school.school_code }}</strong>
+        </div>
+        <div style="font-size:0.72rem; color:#64748b;">
+          {{ school.address }} • Ph: {{ school.phone }}
+        </div>
+      </div>
+    </div>
+
+    <div style="text-align:right; flex-shrink:0;">
+      <div style="border:1.5px solid #0f172a; border-radius:6px; padding:4px 10px; background:#f8fafc; text-align:center;">
+        <span style="font-size:0.68rem; font-weight:800; color:#475569; text-transform:uppercase; display:block;">Academic Session</span>
+        <strong style="font-size:0.92rem; color:#0f172a;">{{ school.academic_year }}</strong>
+      </div>
+      <div style="font-size:0.72rem; color:#64748b; margin-top:3px; font-weight:600;">
+        Official Master Timetable
+      </div>
+    </div>
+  </div>
+
+  <!-- Document Title & Class Info Ribbon -->
+  <div style="background:#0f172a; color:#ffffff; padding:10px 16px; border-radius:6px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div>
+      <span style="font-weight:900; font-size:1.05rem; text-transform:uppercase; letter-spacing:0.5px; display:inline-flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-clock btn-no-print" style="color:#60a5fa;"></i>
+        Weekly Schedule: {{ selected_class.name }} - Section {{ selected_section.name }}
+      </span>
+    </div>
+    <div style="font-size:0.82rem; font-weight:600; color:#e2e8f0; display:flex; gap:16px; flex-wrap:wrap;">
+      <span>Class Teacher: <strong style="color:#ffffff;">{{ selected_section.class_teacher.full_name|default:"Assigned Faculty" }}</strong></span>
+      <span>Room: <strong style="color:#ffffff;">{{ selected_section.room_number|default:"Room 101" }}</strong></span>
+      <span>School Hours: <strong style="color:#ffffff;">08:30 AM - 01:30 PM</strong></span>
+    </div>
+  </div>
+
+  <!-- Weekly Timetable Schedule -->
+  <div style="display:flex; flex-direction:column; gap:14px;">
+    {% for day, periods in schedule_by_day.items %}
+    <div class="day-row-card" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+      
+      <!-- Day Row Header -->
+      <div style="background:#f8fafc; padding:10px 16px; border-bottom:1px solid #e2e8f0; font-weight:800; color:#0f172a; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="display:inline-flex; align-items:center; gap:6px; font-size:0.95rem;">
+            <i class="fa-regular fa-calendar-check btn-no-print" style="color:#2563eb;"></i> {{ day }}
+          </span>
+          <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:700; font-size:0.7rem; padding:2px 8px; border-radius:4px;">
+            {{ periods|length }} Period{{ periods|length|pluralize }}
+          </span>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:8px;">
+          {% if user_perms.can_manage_timetable %}
+          <button type="button" onclick="openAddPeriodModal('{{ day }}')" class="btn-no-print no-print" title="Add Period to {{ day }}" style="background:#eff6ff; border:1px solid #bfdbfe; color:#2563eb; font-size:0.76rem; font-weight:700; border-radius:6px; padding:3px 10px; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+            <i class="fa-solid fa-plus"></i> Add Period
+          </button>
+          {% endif %}
+          <span style="font-size:0.75rem; color:#64748b; font-weight:600;">Working Day</span>
+        </div>
+      </div>
+      
+      <!-- Periods Grid for this Day -->
+      <div style="padding:12px; display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+        {% for p in periods %}
+        <div class="period-slot-box" id="period-card-{{ p.id }}">
+          
+          <!-- Edit / Delete Action Buttons (Hidden on Print) -->
+          {% if user_perms.can_manage_timetable %}
+          <div class="period-actions btn-no-print no-print">
+            <button type="button" onclick="openEditPeriodModal('{{ p.id }}', '{{ p.day|escapejs }}', '{{ p.period_number }}', '{{ p.subject.id }}', '{{ p.teacher.id|default:'' }}', '{{ p.start_time|time:'H:i' }}', '{{ p.end_time|time:'H:i' }}', '{{ p.room_number|escapejs }}')" title="Edit Period" style="background:#eff6ff; border:1px solid #bfdbfe; color:#2563eb; width:26px; height:26px; border-radius:5px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+              <i class="fa-solid fa-pencil" style="font-size:0.75rem;"></i>
+            </button>
+            <form method="POST" action="{% url 'timetable_delete' p.id %}" style="display:inline; margin:0;" onsubmit="return confirm('Delete Period {{ p.period_number }} ({{ p.subject.name }}) on {{ p.day }}?');">
+              {% csrf_token %}
+              <button type="submit" title="Delete Period" style="background:#fef2f2; border:1px solid #fecaca; color:#ef4444; width:26px; height:26px; border-radius:5px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+                <i class="fa-regular fa-trash-can" style="font-size:0.75rem;"></i>
+              </button>
+            </form>
+          </div>
+          {% endif %}
+
+          <div style="font-size:0.7rem; color:#2563eb; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+            Period {{ p.period_number }}
+          </div>
+          
+          <div style="font-weight:800; color:#0f172a; font-size:0.95rem; margin:2px 0; line-height:1.2; word-break:break-word; padding-right:45px;">
+            {{ p.subject.name }}
+          </div>
+          
+          <div style="font-size:0.78rem; color:#475569; font-weight:600; margin-top:4px; display:flex; align-items:center; gap:5px;">
+            <i class="fa-regular fa-user btn-no-print" style="color:#64748b; font-size:0.72rem;"></i>
+            {{ p.teacher.full_name|default:"TBD / No Teacher" }}
+          </div>
+          
+          <div style="font-size:0.72rem; color:#64748b; margin-top:6px; display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #e2e8f0; padding-top:5px;">
+            <span><i class="fa-regular fa-clock btn-no-print" style="font-size:0.7rem;"></i> {{ p.start_time|time:"H:i" }} - {{ p.end_time|time:"H:i" }}</span>
+            <span style="font-weight:700; color:#334155;"><i class="fa-solid fa-door-open btn-no-print" style="font-size:0.68rem;"></i> {{ p.room_number }}</span>
+          </div>
+        </div>
+        {% empty %}
+        <!-- Empty State for Day -->
+        <div style="grid-column: 1 / -1; padding:1.25rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; text-align:center;">
+          <div style="color:#64748b; font-size:0.85rem; font-weight:600;">
+            <i class="fa-regular fa-calendar-xmark" style="color:#94a3b8; font-size:1.1rem; margin-right:4px;"></i>
+            No routine periods configured for {{ day }}.
+          </div>
+          {% if user_perms.can_manage_timetable %}
+          <button type="button" onclick="openAddPeriodModal('{{ day }}')" class="btn btn-outline btn-sm btn-no-print no-print" style="margin-top:8px; font-weight:700; font-size:0.78rem; border-color:#cbd5e1; color:#2563eb; background:#fff;">
+            <i class="fa-solid fa-plus"></i> Add Period to {{ day }}
+          </button>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Official Signatures Block (For Print) -->
+  <div class="print-footer-signatures" style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:2rem; padding-top:1.25rem; border-top:1.5px solid #0f172a;">
+    <div>
+      <div style="font-size:0.75rem; color:#475569; margin-bottom:4px;">
+        Official Academic Routine • Issued by Directorate of Academics
+      </div>
+      <div style="font-size:0.7rem; color:#94a3b8;">
+        Generated from SRS School ERP • {{ school.short_name }}
+      </div>
+    </div>
+
+    <div style="display:flex; gap:40px; text-align:center;">
+      <div>
+        <div style="height:36px; border-bottom:1px solid #0f172a; width:130px; margin-bottom:4px;"></div>
+        <span style="font-size:0.75rem; font-weight:700; color:#0f172a; display:block;">Class Teacher</span>
+      </div>
+      <div>
+        <div style="height:36px; border-bottom:1px solid #0f172a; width:130px; margin-bottom:4px;"></div>
+        <span style="font-size:0.75rem; font-weight:700; color:#0f172a; display:block;">Timetable In-charge</span>
+      </div>
+      <div>
+        {% if school.principal_signature %}
+        <div style="height:36px; display:flex; align-items:flex-end; justify-content:center; margin-bottom:4px;">
+          <img src="{{ school.principal_signature.url }}" alt="Signature" style="max-height:34px; max-width:110px;">
+        </div>
+        {% else %}
+        <div style="height:36px; border-bottom:1px solid #0f172a; width:130px; margin-bottom:4px;"></div>
+        {% endif %}
+        <span style="font-size:0.75rem; font-weight:700; color:#0f172a; display:block;">Principal / Stamp</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ========================================================= -->
+<!-- 1. MODAL: ADD PERIOD SLOT                                 -->
+<!-- ========================================================= -->
+<div id="addPeriodModal" class="modal-backdrop btn-no-print no-print" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out; max-height:90vh; overflow-y:auto;">
+    <div style="background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-calendar-plus" style="color:#60a5fa;"></i> Add New Routine Period
+      </h3>
+      <button type="button" onclick="closeModal('addPeriodModal')" style="background:none; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'timetable_create' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      
+      <!-- Target Class & Section Display -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span style="font-size:0.75rem; color:#64748b; font-weight:700; text-transform:uppercase;">Class & Section</span>
+          <div style="font-weight:800; color:#0f172a; font-size:0.95rem;">
+            {{ selected_class.name }} - Section {{ selected_section.name }}
+          </div>
+        </div>
+        <span class="badge" style="background:#dbeafe; color:#1e40af; font-weight:700;">{{ selected_section.room_number }}</span>
+      </div>
+
+      <input type="hidden" name="class_id" value="{{ selected_class.id }}">
+      <input type="hidden" name="section_id" value="{{ selected_section.id }}">
+
+      <div style="display:grid; grid-template-columns:1.3fr 0.7fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Day of Week <span style="color:#dc2626;">*</span>
+          </label>
+          <select name="day" id="addPeriodDay" required class="form-select" style="margin:0;">
+            {% for d in days %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Period Number <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="number" name="period_number" id="addPeriodNumber" min="1" max="12" value="1" required class="form-input" style="margin:0;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Subject <span style="color:#dc2626;">*</span>
+        </label>
+        <select name="subject_id" required class="form-select" style="margin:0;">
+          <option value="">-- Select Subject --</option>
+          {% for s in subjects %}
+          <option value="{{ s.id }}">{{ s.name }} ({{ s.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Teacher / Faculty (Optional)
+        </label>
+        <select name="teacher_id" class="form-select" style="margin:0;">
+          <option value="">-- No Teacher Assigned / TBD --</option>
+          {% for t in teachers %}
+          <option value="{{ t.id }}">{{ t.full_name }} ({{ t.designation }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Quick Timings Presets -->
+      <div style="background:#f1f5f9; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+        <span style="font-size:0.72rem; font-weight:700; color:#475569; display:block; margin-bottom:5px;">
+          ⚡ Quick Presets (Click to autofill timings):
+        </span>
+        <div style="display:flex; flex-wrap:wrap; gap:5px;">
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyAddPreset(1, '08:30', '09:15')">P1 (08:30-09:15)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyAddPreset(2, '09:15', '10:00')">P2 (09:15-10:00)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyAddPreset(3, '10:00', '10:45')">P3 (10:00-10:45)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyAddPreset(4, '11:15', '12:00')">P4 (11:15-12:00)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyAddPreset(5, '12:00', '12:45')">P5 (12:00-12:45)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyAddPreset(6, '12:45', '13:30')">P6 (12:45-01:30)</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Start Time <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="time" name="start_time" id="addPeriodStart" required class="form-input" style="margin:0;" value="08:30">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            End Time <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="time" name="end_time" id="addPeriodEnd" required class="form-input" style="margin:0;" value="09:15">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Room No.
+          </label>
+          <input type="text" name="room_number" id="addPeriodRoom" class="form-input" style="margin:0;" value="{{ selected_section.room_number|default:'Room 101' }}">
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:14px;">
+        <button type="button" onclick="closeModal('addPeriodModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:700;">
+          <i class="fa-solid fa-check"></i> Add Period Slot
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========================================================= -->
+<!-- 2. MODAL: EDIT PERIOD SLOT                                -->
+<!-- ========================================================= -->
+<div id="editPeriodModal" class="modal-backdrop btn-no-print no-print" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out; max-height:90vh; overflow-y:auto;">
+    <div style="background:linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-pen-to-square" style="color:#93c5fd;"></i> Edit Period Slot
+      </h3>
+      <button type="button" onclick="closeModal('editPeriodModal')" style="background:none; border:none; color:#bfdbfe; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" id="editPeriodForm" action="" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="class_id" value="{{ selected_class.id }}">
+      <input type="hidden" name="section_id" value="{{ selected_section.id }}">
+
+      <div style="display:grid; grid-template-columns:1.3fr 0.7fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Day of Week <span style="color:#dc2626;">*</span>
+          </label>
+          <select name="day" id="editPeriodDay" required class="form-select" style="margin:0;">
+            {% for d in days %}
+            <option value="{{ d }}">{{ d }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Period Number <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="number" name="period_number" id="editPeriodNumber" min="1" max="12" required class="form-input" style="margin:0;">
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Subject <span style="color:#dc2626;">*</span>
+        </label>
+        <select name="subject_id" id="editPeriodSubject" required class="form-select" style="margin:0;">
+          <option value="">-- Select Subject --</option>
+          {% for s in subjects %}
+          <option value="{{ s.id }}">{{ s.name }} ({{ s.code }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+          Teacher / Faculty (Optional)
+        </label>
+        <select name="teacher_id" id="editPeriodTeacher" class="form-select" style="margin:0;">
+          <option value="">-- No Teacher Assigned / TBD --</option>
+          {% for t in teachers %}
+          <option value="{{ t.id }}">{{ t.full_name }} ({{ t.designation }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Quick Timings Presets for Edit -->
+      <div style="background:#f1f5f9; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+        <span style="font-size:0.72rem; font-weight:700; color:#475569; display:block; margin-bottom:5px;">
+          ⚡ Quick Presets (Click to autofill timings):
+        </span>
+        <div style="display:flex; flex-wrap:wrap; gap:5px;">
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyEditPreset(1, '08:30', '09:15')">P1 (08:30-09:15)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyEditPreset(2, '09:15', '10:00')">P2 (09:15-10:00)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyEditPreset(3, '10:00', '10:45')">P3 (10:00-10:45)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyEditPreset(4, '11:15', '12:00')">P4 (11:15-12:00)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyEditPreset(5, '12:00', '12:45')">P5 (12:00-12:45)</button>
+          <button type="button" class="btn btn-sm" style="background:#fff; border:1px solid #cbd5e1; font-size:0.7rem; padding:2px 6px;" onclick="applyEditPreset(6, '12:45', '13:30')">P6 (12:45-01:30)</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Start Time <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="time" name="start_time" id="editPeriodStart" required class="form-input" style="margin:0;">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            End Time <span style="color:#dc2626;">*</span>
+          </label>
+          <input type="time" name="end_time" id="editPeriodEnd" required class="form-input" style="margin:0;">
+        </div>
+        <div>
+          <label style="font-size:0.82rem; font-weight:700; color:#334155; display:block; margin-bottom:4px;">
+            Room No.
+          </label>
+          <input type="text" name="room_number" id="editPeriodRoom" class="form-input" style="margin:0;">
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:14px;">
+        <button type="button" onclick="closeModal('editPeriodModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:700;">
+          <i class="fa-solid fa-floppy-disk"></i> Update Period Slot
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ========================================================= -->
+<!-- 3. MODAL: AUTO-GENERATE ROUTINE                           -->
+<!-- ========================================================= -->
+<div id="generateRoutineModal" class="modal-backdrop btn-no-print no-print" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.65); z-index:9999; align-items:center; justify-content:center; padding:15px; backdrop-filter:blur(3px);">
+  <div style="background:#fff; border-radius:14px; width:100%; max-width:500px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalFadeIn 0.2s ease-out;">
+    <div style="background:linear-gradient(135deg, #0f172a 0%, #334155 100%); color:#fff; padding:1.1rem 1.4rem; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:1.15rem; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-wand-magic-sparkles" style="color:#f59e0b;"></i> Auto-Generate Routine
+      </h3>
+      <button type="button" onclick="closeModal('generateRoutineModal')" style="background:none; border:none; color:#94a3b8; font-size:1.4rem; cursor:pointer;">&times;</button>
+    </div>
+
+    <form method="POST" action="{% url 'timetable_generate_default' %}" style="padding:1.4rem;">
+      {% csrf_token %}
+      <input type="hidden" name="class_id" value="{{ selected_class.id }}">
+      <input type="hidden" name="section_id" value="{{ selected_section.id }}">
+
+      <div style="margin-bottom:14px; font-size:0.9rem; color:#334155; line-height:1.5;">
+        Generate standard weekly routine (Periods 1 to 6) for <strong>{{ selected_class.name }} - Section {{ selected_section.name }}</strong> automatically across Monday to Saturday using available subjects and teachers.
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:16px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:700; color:#0f172a; font-size:0.85rem; margin:0;">
+          <input type="checkbox" name="overwrite" value="1" style="width:17px; height:17px; accent-color:#2563eb;">
+          Overwrite existing periods if any
+        </label>
+        <span style="font-size:0.75rem; color:#64748b; margin-left:25px; display:block;">
+          Tick this box to replace previously entered periods with the new standard schedule.
+        </span>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:14px;">
+        <button type="button" onclick="closeModal('generateRoutineModal')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#0f172a; border-color:#0f172a; font-weight:700;">
+          <i class="fa-solid fa-bolt"></i> Generate Now
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openModal(id) {
+  const m = document.getElementById(id);
+  if (m) {
+    m.style.display = 'flex';
+  }
+}
+
+function closeModal(id) {
+  const m = document.getElementById(id);
+  if (m) {
+    m.style.display = 'none';
+  }
+}
+
+// Close when clicking on backdrop
+window.onclick = function(event) {
+  if (event.target.classList && event.target.classList.contains('modal-backdrop')) {
+    event.target.style.display = 'none';
+  }
+};
+
+// Close on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-backdrop').forEach(m => m.style.display = 'none');
+  }
+});
+
+function openAddPeriodModal(dayName) {
+  if (dayName) {
+    const daySelect = document.getElementById('addPeriodDay');
+    if (daySelect) daySelect.value = dayName;
+  }
+  openModal('addPeriodModal');
+}
+
+function applyAddPreset(pNum, start, end) {
+  document.getElementById('addPeriodNumber').value = pNum;
+  document.getElementById('addPeriodStart').value = start;
+  document.getElementById('addPeriodEnd').value = end;
+}
+
+function applyEditPreset(pNum, start, end) {
+  document.getElementById('editPeriodNumber').value = pNum;
+  document.getElementById('editPeriodStart').value = start;
+  document.getElementById('editPeriodEnd').value = end;
+}
+
+function openEditPeriodModal(id, day, periodNum, subjectId, teacherId, startTime, endTime, room) {
+  const form = document.getElementById('editPeriodForm');
+  if (form) {
+    form.action = `/timetable/${id}/edit/`;
+  }
+  
+  const dayEl = document.getElementById('editPeriodDay');
+  if (dayEl) dayEl.value = day;
+
+  const numEl = document.getElementById('editPeriodNumber');
+  if (numEl) numEl.value = periodNum;
+
+  const subEl = document.getElementById('editPeriodSubject');
+  if (subEl) subEl.value = subjectId;
+
+  const tchEl = document.getElementById('editPeriodTeacher');
+  if (tchEl) tchEl.value = teacherId || '';
+
+  const startEl = document.getElementById('editPeriodStart');
+  if (startEl) startEl.value = startTime;
+
+  const endEl = document.getElementById('editPeriodEnd');
+  if (endEl) endEl.value = endTime;
+
+  const roomEl = document.getElementById('editPeriodRoom');
+  if (roomEl) roomEl.value = room;
+
+  openModal('editPeriodModal');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Issue Fee Invoice{% endblock %}
+{% block page_title %}Issue Student Fee Invoice{% endblock %}
+
+{% block content %}
+<div class="card-panel" style="max-width:750px; margin:0 auto;">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-file-invoice-dollar" style="color:var(--primary);"></i> Generate Student Fee Invoice</h3>
+    <a href="{% url 'fees_list' %}" class="btn btn-outline btn-sm">Cancel</a>
+  </div>
+  <div class="card-body">
+    <p style="font-size:0.85rem; color:#64748b; margin-bottom:1.5rem;">
+      Select the student and choose from your school fee structure (Admission Fee, Monthly, Quarterly, Half Yearly, Annual, Transport, Exam, or Other).
+    </p>
+
+    <form method="POST">
+      {% csrf_token %}
+      <div class="form-grid">
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label">Select Student (Search by Admission No or Name) *</label>
+          {{ form.student }}
+          <span style="font-size:0.75rem; color:#64748b;">Displays: Admission No | Student Name (Class & Section)</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Fee Structure Category *</label>
+          {{ form.fee_category }}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Invoice Number (Auto) *</label>
+          {{ form.invoice_number }}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Fee Amount (₹) *</label>
+          {{ form.amount }}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Discount / Scholarship (₹)</label>
+          {{ form.discount }}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Late Fine / Penalty (₹)</label>
+          {{ form.fine }}
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Fee Payment Due Date *</label>
+          {{ form.due_date }}
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:2rem; border-top:1px solid #e2e8f0; padding-top:1rem;">
+        <a href="{% url 'fees_list' %}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" style="padding:10px 24px;">
+          <i class="fa-solid fa-check"></i> Generate & Issue Invoice
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

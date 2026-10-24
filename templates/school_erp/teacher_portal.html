@@ -1,0 +1,258 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Faculty Workspace Portal{% endblock %}
+{% block page_title %}Faculty & Teacher Workspace Portal{% endblock %}
+
+{% block header_actions %}
+{% if user.is_superuser and all_teachers %}
+<!-- Superuser Switch Faculty Selector -->
+<form method="GET" style="display:flex; align-items:center; gap:8px;">
+  <span style="font-size:0.82rem; font-weight:700; color:#64748b;">View Faculty:</span>
+  <select name="teacher_id" onchange="this.form.submit()" class="form-select form-select-sm" style="width:200px; height:36px; font-weight:600;">
+    {% for t in all_teachers %}
+    <option value="{{ t.id }}" {% if teacher and teacher.id == t.id %}selected{% endif %}>{{ t.full_name }} ({{ t.department }})</option>
+    {% endfor %}
+  </select>
+</form>
+{% endif %}
+<a href="{% url 'teacher_list' %}" class="btn btn-secondary btn-sm">
+  <i class="fa-solid fa-users"></i> Faculty Directory
+</a>
+{% endblock %}
+
+{% block content %}
+{% if teacher %}
+<!-- Top Welcome Hero Banner -->
+<div style="background:linear-gradient(135deg, #1e3a8a, #3b82f6); border-radius:16px; padding:1.75rem 2rem; color:#ffffff; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1.25rem; box-shadow:0 10px 25px rgba(30,58,138,0.2);">
+  <div style="display:flex; align-items:center; gap:16px;">
+    <div style="width:68px; height:68px; border-radius:50%; background:#ffffff; color:#1e3a8a; font-size:1.8rem; font-weight:800; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+      {{ teacher.first_name|slice:":1" }}
+    </div>
+    <div>
+      <div style="font-size:0.85rem; font-weight:700; color:#bfdbfe; text-transform:uppercase; letter-spacing:0.5px;">Faculty Workspace</div>
+      <h2 style="font-size:1.5rem; font-weight:800; margin:2px 0 4px; color:#ffffff;">{{ teacher.full_name }}</h2>
+      <div style="font-size:0.88rem; color:#e0e7ff;">
+        {{ teacher.designation }} • {{ teacher.department }} • ID: <strong>{{ teacher.employee_id }}</strong>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+    <div style="text-align:right; padding-right:12px; border-right:1px solid rgba(255,255,255,0.25);">
+      <div style="font-size:0.75rem; color:#bfdbfe; font-weight:600; text-transform:uppercase;">Today's Date</div>
+      <div style="font-size:1.15rem; font-weight:800;">{{ today_name }}, {{ today_date|date:"d M Y" }}</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="{% url 'attendance' %}" class="btn btn-sm" style="background:#ffffff; color:#1e3a8a; font-weight:800; padding:8px 14px; border-radius:8px; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-clipboard-user"></i> Daily Attendance
+      </a>
+      <a href="{% url 'marks_entry' %}" class="btn btn-sm" style="background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#ffffff; font-weight:700; padding:8px 14px; border-radius:8px; text-decoration:none; display:inline-flex; align-items:center; gap:6px;">
+        <i class="fa-solid fa-pen-to-square"></i> Enter Marks
+      </a>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid; grid-template-columns: 1fr 340px; gap:1.5rem; align-items:start;">
+
+  <!-- Main Left Column -->
+  <div style="display:flex; flex-direction:column; gap:1.5rem;">
+
+    <!-- Class Teacher Duties & Today's Attendance Status -->
+    {% if managed_sections %}
+    <div class="card-panel">
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding:1.1rem 1.5rem;">
+        <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-chalkboard-user" style="color:#059669;"></i> My Class & Attendance Responsibilities
+        </h3>
+        <span class="badge" style="background:#dcfce7; color:#15803d; font-weight:700;">Class Teacher</span>
+      </div>
+      <div style="padding:1.25rem 1.5rem;">
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:14px;">
+          {% for sec_info in section_attendance_status %}
+          <div style="border:1px solid #e2e8f0; border-radius:12px; padding:1.15rem; background:#ffffff; box-shadow:0 2px 5px rgba(0,0,0,0.02);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:1.05rem; color:#0f172a;">{{ sec_info.section.class_level.name }} - Sec {{ sec_info.section.name }}</strong>
+              <span class="badge" style="background:#f1f5f9; color:#475569;">{{ sec_info.total_students }} Students</span>
+            </div>
+            <div style="font-size:0.82rem; color:#64748b; margin-bottom:12px;">
+              Room: <strong>{{ sec_info.section.room_number }}</strong>
+            </div>
+
+            {% if sec_info.is_taken %}
+            <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px 12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.82rem; font-weight:700; color:#15803d;">
+                <i class="fa-solid fa-circle-check"></i> Recorded: {{ sec_info.present_count }} Present, {{ sec_info.absent_count }} Absent
+              </span>
+            </div>
+            <a href="{% url 'attendance' %}?class_id={{ sec_info.section.class_level.id }}&section_id={{ sec_info.section.id }}&date={{ today_date|date:'Y-m-d' }}" class="btn btn-outline btn-sm" style="width:100%; justify-content:center; font-weight:700; color:#059669; border-color:#86efac;">
+              Review / Update Attendance
+            </a>
+            {% else %}
+            <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:8px; padding:8px 12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:0.82rem; font-weight:700; color:#b45309;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Today's Attendance Pending!
+              </span>
+            </div>
+            <a href="{% url 'attendance' %}?class_id={{ sec_info.section.class_level.id }}&section_id={{ sec_info.section.id }}&date={{ today_date|date:'Y-m-d' }}" class="btn btn-sm" style="width:100%; justify-content:center; font-weight:800; background:#059669; color:#fff; text-decoration:none; padding:7px 0; border-radius:8px; display:inline-flex; align-items:center; gap:6px;">
+              <i class="fa-solid fa-clipboard-check"></i> Take Attendance Now
+            </a>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Today's Teaching Schedule -->
+    <div class="card-panel">
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding:1.1rem 1.5rem;">
+        <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-calendar-day" style="color:#2563eb;"></i> Today's Teaching Routine ({{ today_name }})
+        </h3>
+        <span class="badge" style="background:#eff6ff; color:#1d4ed8; font-weight:700;">{{ today_classes|length }} Periods Scheduled</span>
+      </div>
+      <div style="padding:1.25rem 1.5rem;">
+        {% if today_classes %}
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:12px;">
+          {% for item in today_classes %}
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-left:4px solid #2563eb; border-radius:10px; padding:12px 14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:800; font-size:0.78rem;">Period {{ item.period_number }}</span>
+              <span style="font-size:0.78rem; font-weight:700; color:#475569;">
+                <i class="fa-regular fa-clock"></i> {{ item.start_time|time:"H:i" }} - {{ item.end_time|time:"H:i" }}
+              </span>
+            </div>
+            <div style="font-size:1rem; font-weight:800; color:#0f172a;">{{ item.subject.name }}</div>
+            <div style="font-size:0.84rem; color:#334155; margin-top:2px;">
+              <strong>{{ item.class_level.name }}</strong> - Section {{ item.section.name }}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:6px; border-top:1px dashed #e2e8f0; font-size:0.75rem; color:#64748b;">
+              <span><i class="fa-solid fa-door-open"></i> {{ item.room_number }}</span>
+              <a href="{% url 'attendance' %}?class_id={{ item.class_level.id }}&section_id={{ item.section.id }}" style="color:#2563eb; font-weight:700; text-decoration:none;">View Class</a>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div style="text-align:center; padding:2rem 1rem; color:#94a3b8;">
+          <i class="fa-solid fa-mug-hot" style="font-size:2rem; color:#cbd5e1; margin-bottom:8px; display:block;"></i>
+          No teaching periods scheduled for you on {{ today_name }}. Enjoy your preparation time!
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Weekly Routine Tabulation -->
+    <div class="card-panel">
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding:1.1rem 1.5rem;">
+        <h3 style="margin:0; font-size:1.1rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-calendar-week" style="color:#4f46e5;"></i> Full Week Timetable
+        </h3>
+        <a href="{% url 'timetable' %}" class="btn btn-outline btn-sm" style="font-weight:600;">Full Timetable View</a>
+      </div>
+      <div style="padding:1.25rem 1.5rem; display:flex; flex-direction:column; gap:12px;">
+        {% for d in schedule_days %}
+        <div style="border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+          <div style="background:#f8fafc; padding:8px 14px; font-weight:800; font-size:0.86rem; color:#0f172a; display:flex; justify-content:space-between; align-items:center;">
+            <span>{{ d.day }}</span>
+            <span class="badge" style="background:#f1f5f9; color:#475569; font-size:0.75rem;">{{ d.count }} Periods</span>
+          </div>
+          {% if d.periods %}
+          <div style="padding:10px; display:flex; flex-wrap:wrap; gap:8px;">
+            {% for item in d.periods %}
+            <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; font-size:0.8rem;">
+              <span style="font-weight:800; color:#2563eb;">P{{ item.period_number }}:</span>
+              <strong>{{ item.subject.name }}</strong> ({{ item.class_level.code }}-{{ item.section.name }})
+              <span style="color:#64748b; font-size:0.75rem;">• {{ item.start_time|time:"H:i" }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div style="padding:8px 14px; font-size:0.78rem; color:#94a3b8;">No periods scheduled.</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right Sidebar Column -->
+  <div style="display:flex; flex-direction:column; gap:1.25rem;">
+
+    <!-- Quick Shortcuts Card -->
+    <div class="card-panel" style="padding:1.25rem;">
+      <h4 style="font-size:0.95rem; font-weight:800; color:#0f172a; margin:0 0 12px; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> Quick Shortcuts
+      </h4>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <a href="{% url 'attendance' %}" class="btn btn-outline btn-sm" style="justify-content:flex-start; gap:10px; padding:9px 12px; text-decoration:none;">
+          <i class="fa-solid fa-clipboard-check" style="color:#059669; width:18px;"></i>
+          <span>Take Daily Attendance</span>
+        </a>
+        <a href="{% url 'marks_entry' %}" class="btn btn-outline btn-sm" style="justify-content:flex-start; gap:10px; padding:9px 12px; text-decoration:none;">
+          <i class="fa-solid fa-pen-to-square" style="color:#2563eb; width:18px;"></i>
+          <span>Enter Exam Marks</span>
+        </a>
+        <a href="{% url 'student_list' %}" class="btn btn-outline btn-sm" style="justify-content:flex-start; gap:10px; padding:9px 12px; text-decoration:none;">
+          <i class="fa-solid fa-user-graduate" style="color:#7c3aed; width:18px;"></i>
+          <span>Student Directory</span>
+        </a>
+        <a href="{% url 'teacher_detail' teacher.pk %}" class="btn btn-outline btn-sm" style="justify-content:flex-start; gap:10px; padding:9px 12px; text-decoration:none;">
+          <i class="fa-solid fa-id-badge" style="color:#4f46e5; width:18px;"></i>
+          <span>My Complete Profile</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Subjects Taught -->
+    <div class="card-panel" style="padding:1.25rem;">
+      <h4 style="font-size:0.95rem; font-weight:800; color:#0f172a; margin:0 0 10px; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-book-open" style="color:#2563eb;"></i> My Subjects
+      </h4>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for s in teacher.subjects_taught.all %}
+        <span class="badge" style="background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-size:0.8rem; padding:4px 8px;">
+          {{ s.name }} ({{ s.code }})
+        </span>
+        {% empty %}
+        <div style="font-size:0.8rem; color:#94a3b8;">No subjects explicitly mapped.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- School Circulars & Notices -->
+    <div class="card-panel" style="padding:1.25rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h4 style="font-size:0.95rem; font-weight:800; color:#0f172a; margin:0; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-bullhorn" style="color:#ea580c;"></i> Staff Notices
+        </h4>
+        <a href="{% url 'notices' %}" style="font-size:0.75rem; color:#2563eb; font-weight:700; text-decoration:none;">All</a>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        {% for n in recent_notices %}
+        <div style="border-left:3px solid {% if n.is_urgent %}#ef4444{% else %}#3b82f6{% endif %}; background:#f8fafc; padding:8px 10px; border-radius:0 6px 6px 0;">
+          <div style="font-weight:700; font-size:0.84rem; color:#0f172a;">{{ n.title }}</div>
+          <div style="font-size:0.72rem; color:#64748b; margin-top:2px;">{{ n.created_at|date:"d M Y" }}</div>
+        </div>
+        {% empty %}
+        <div style="font-size:0.8rem; color:#94a3b8;">No circulars posted yet.</div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
+{% else %}
+<div class="card-panel" style="text-align:center; padding:3rem 1rem;">
+  <i class="fa-solid fa-chalkboard-user" style="font-size:3rem; color:#cbd5e1; margin-bottom:12px; display:block;"></i>
+  <h3 style="color:#0f172a; font-weight:800;">No Faculty Profile Found</h3>
+  <p style="color:#64748b; font-size:0.9rem; max-width:460px; margin:0 auto 1.5rem;">
+    Your login account is not yet linked to an active faculty record. Please contact the school administrator to register your faculty profile.
+  </p>
+  <a href="{% url 'teacher_list' %}" class="btn btn-primary">Go to Faculty Directory</a>
+</div>
+{% endif %}
+{% endblock %}

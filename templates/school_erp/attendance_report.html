@@ -1,0 +1,87 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Attendance Summary Report{% endblock %}
+{% block page_title %}Student Attendance Performance Register{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'attendance' %}" class="btn btn-primary btn-sm">
+  <i class="fa-solid fa-clipboard-check"></i> Mark Daily Attendance
+</a>
+{% endblock %}
+
+{% block content %}
+<form method="GET" class="filter-bar btn-no-print no-print" style="display:flex; align-items:center; gap:12px; flex-wrap:nowrap; background:#ffffff; padding:10px 16px; border-radius:10px; border:1px solid #e2e8f0; margin-bottom:1.5rem; overflow-x:auto;">
+  <div style="font-weight:700; color:#1e293b; white-space:nowrap; flex-shrink:0;">
+    <i class="fa-solid fa-chart-column" style="color:var(--primary);"></i> Select Class:
+  </div>
+  <div style="width:180px; flex-shrink:0;">
+    <select name="class_id" class="form-select" data-placeholder="Select Class" style="width:100%;" onchange="this.form.submit()">
+      {% for c in classes %}
+      <option value="{{ c.id }}" {% if selected_class.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button onclick="window.print()" type="button" class="btn btn-outline btn-sm btn-no-print" style="height:38px; padding:0 14px; font-weight:600; flex-shrink:0; white-space:nowrap;">
+    <i class="fa-solid fa-print"></i> Print Report
+  </button>
+</form>
+
+<div class="card-panel">
+  <div class="card-header">
+    <h3><i class="fa-solid fa-chart-pie" style="color:var(--primary);"></i> Attendance Statistics: {{ selected_class.name }}</h3>
+    <span class="badge" style="background:#e0e7ff; color:#312e81; font-weight:700;">Academic Year: {{ school.academic_year }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="custom-table">
+      <thead>
+        <tr>
+          <!-- Frozen Action Column on Left -->
+          <th class="freeze-action-col" style="width:90px; text-align:center;">Action</th>
+          <th>Roll No</th>
+          <th>Student Name</th>
+          <th>Section</th>
+          <th>Total Days Tracked</th>
+          <th>Days Present</th>
+          <th>Attendance Rate</th>
+          <th>Health Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in students_report %}
+        <tr>
+          <td class="freeze-action-col" style="text-align:center;">
+            <a href="{% url 'student_detail' row.student.id %}" class="btn btn-outline btn-sm" style="padding:4px 8px; font-size:0.75rem;">Profile</a>
+          </td>
+          <td><strong style="color:var(--primary);">#{{ row.student.roll_number }}</strong></td>
+          <td><strong style="color:#0f172a;">{{ row.student.full_name }}</strong></td>
+          <td>Section {{ row.student.section.name }}</td>
+          <td>{{ row.total }} Days</td>
+          <td><strong style="color:#065f46;">{{ row.present }}</strong> Days</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="flex:1; height:8px; background:#e2e8f0; border-radius:4px; overflow:hidden; min-width:80px;">
+                <div style="width: {{ row.percentage }}%; height:100%; background: {% if row.percentage >= 75 %}#10b981{% elif row.percentage >= 60 %}#f59e0b{% else %}#ef4444{% endif %};"></div>
+              </div>
+              <strong style="font-size:0.85rem;">{{ row.percentage }}%</strong>
+            </div>
+          </td>
+          <td>
+            {% if row.percentage >= 75 %}
+            <span class="badge badge-paid">Good (Eligible)</span>
+            {% elif row.percentage >= 60 %}
+            <span class="badge badge-partial">Moderate</span>
+            {% else %}
+            <span class="badge badge-unpaid">Shortage Alert</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" style="text-align:center; padding:2rem; color:#94a3b8;">No attendance data found for this class.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

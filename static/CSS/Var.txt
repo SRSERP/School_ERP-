@@ -1,0 +1,15 @@
+@pbg:#ccc;
+@mfn:tahoma;
+@vl:10px;
+@bgc1:#035994;
+@bgc2:#00c2e5;
+@col1:#fff;
+@col:#000;
+@color:"col";
+@per:1.0;
+@bg1:#f2f2fd;
+@import url('https://fonts.googleapis.com/css?family=Poppins');
+@fn:'Poppins', sans-serif;
+@path:"../IMAGES/";
+@gunnu:h4;
+@spidey:h1;

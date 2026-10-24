@@ -1,0 +1,344 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Class-Wise Pending Dues & Defaulters List{% endblock %}
+{% block page_title %}Class-Wise Pending Dues Report{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+  <a href="{% url 'export_defaulters_excel' %}?{% if selected_class %}class_id={{ selected_class }}&{% endif %}{% if search %}q={{ search }}&{% endif %}{% if min_due %}min_due={{ min_due }}{% endif %}" class="btn btn-secondary btn-sm" style="font-weight:700; color:#059669; border-color:#a7f3d0; background:#f0fdf4;">
+    <i class="fa-solid fa-file-excel"></i> Export to Excel (.xlsx)
+  </a>
+  <a href="{% url 'class_fee_master' %}" class="btn btn-secondary btn-sm">
+    <i class="fa-solid fa-sliders"></i> Class Fee Master
+  </a>
+  <a href="{% url 'fee_counter' %}" class="btn btn-primary btn-sm" style="background:#059669; border-color:#059669; font-weight:700;">
+    <i class="fa-solid fa-cash-register"></i> Fee Counter
+  </a>
+  <button onclick="window.print()" class="btn btn-secondary btn-sm" style="background:#475569; color:#fff; border-color:#475569;">
+    <i class="fa-solid fa-print"></i> Print Report
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1240px; margin:0 auto;">
+
+  <!-- Summary Metric Cards -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:16px; margin-bottom:1.5rem;">
+    
+    <div class="card-panel" style="background:linear-gradient(135deg, #b91c1c 0%, #dc2626 100%); color:#fff; padding:1.25rem; border-radius:12px; box-shadow:0 4px 15px rgba(220,38,38,0.25);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:#fecaca; letter-spacing:0.5px;">
+            Total Pending Dues
+          </div>
+          <div style="font-size:1.85rem; font-weight:900; margin-top:6px; color:#fff;">
+            ₹{{ total_school_due|floatformat:0 }}
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,0.2); width:46px; height:46px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px;">
+          <i class="fa-solid fa-hand-holding-dollar"></i>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:0.78rem; color:#fee2e2;">
+        {% if selected_class %}For Selected Class Filter{% else %}Across All Classes & Sections{% endif %}
+      </div>
+    </div>
+
+    <div class="card-panel" style="background:linear-gradient(135deg, #d97706 0%, #f59e0b 100%); color:#fff; padding:1.25rem; border-radius:12px; box-shadow:0 4px 15px rgba(245,158,11,0.25);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:#fef3c7; letter-spacing:0.5px;">
+            Defaulter Students
+          </div>
+          <div style="font-size:1.85rem; font-weight:900; margin-top:6px; color:#fff;">
+            {{ total_defaulter_count }}
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,0.2); width:46px; height:46px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px;">
+          <i class="fa-solid fa-user-xmark"></i>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:0.78rem; color:#fffbeb;">
+        Students with unpaid fee invoices
+      </div>
+    </div>
+
+    <div class="card-panel" style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#fff; padding:1.25rem; border-radius:12px; box-shadow:0 4px 15px rgba(30,27,75,0.25);">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="font-size:0.8rem; text-transform:uppercase; font-weight:700; color:#c7d2fe; letter-spacing:0.5px;">
+            WhatsApp Reminders
+          </div>
+          <div style="font-size:1.25rem; font-weight:800; margin-top:8px; color:#38bdf8;">
+            1-Click Direct Send
+          </div>
+        </div>
+        <div style="background:rgba(255,255,255,0.2); width:46px; height:46px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; color:#22c55e;">
+          <i class="fa-brands fa-whatsapp"></i>
+        </div>
+      </div>
+      <div style="margin-top:10px; font-size:0.78rem; color:#e0e7ff;">
+        Instant dues notices sent directly to parents
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Class Quick Filters Bar -->
+  <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:1.25rem; display:flex; gap:8px; align-items:center; overflow-x:auto; white-space:nowrap;">
+    <span style="font-size:12px; font-weight:800; color:#475569; text-transform:uppercase; margin-right:6px;">
+      <i class="fa-solid fa-filter"></i> Class:
+    </span>
+    <a href="{% url 'fees_defaulters' %}{% if search %}?q={{ search }}{% endif %}" 
+       class="badge-filter {% if not selected_class %}active-filter{% endif %}"
+       style="padding:6px 14px; border-radius:20px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block; border:1px solid {% if not selected_class %}#2563eb; background:#2563eb; color:#fff{% else %}#cbd5e1; background:#f8fafc; color:#475569{% endif %};">
+      All Classes
+    </a>
+    {% for cl in classes %}
+    <a href="{% url 'fees_defaulters' %}?class_id={{ cl.id }}{% if search %}&q={{ search }}{% endif %}{% if min_due %}&min_due={{ min_due }}{% endif %}" 
+       class="badge-filter {% if selected_class|stringformat:'s' == cl.id|stringformat:'s' %}active-filter{% endif %}"
+       style="padding:6px 14px; border-radius:20px; font-size:12px; font-weight:700; text-decoration:none; display:inline-block; border:1px solid {% if selected_class|stringformat:'s' == cl.id|stringformat:'s' %}#2563eb; background:#2563eb; color:#fff{% else %}#cbd5e1; background:#f8fafc; color:#475569{% endif %};">
+      {{ cl.name }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <!-- Detailed Search and Filter Controls (Single Horizontal Line) -->
+  <div class="card-panel" style="padding:0.85rem 1.25rem; margin-bottom:1.25rem; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px;">
+    <form method="GET" action="{% url 'fees_defaulters' %}" style="display:flex; flex-wrap:nowrap; gap:12px; align-items:center; overflow-x:auto;">
+      <!-- Search Box -->
+      <div style="flex:1; min-width:240px; position:relative;">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:11px; color:#94a3b8; font-size:13px;"></i>
+        <input type="text" name="q" value="{{ search }}" placeholder="Search by student name, admission no, phone..." 
+               class="form-control" style="padding-left:36px; height:38px; font-size:13px; border-radius:8px; width:100%; box-sizing:border-box;">
+      </div>
+
+      <!-- Class Dropdown -->
+      <div style="width:190px; flex-shrink:0;">
+        <select name="class_id" class="form-select" style="height:38px; font-size:13px; border-radius:8px; width:100%;">
+          <option value="">All Classes</option>
+          {% for cl in classes %}
+          <option value="{{ cl.id }}" {% if selected_class|stringformat:'s' == cl.id|stringformat:'s' %}selected{% endif %}>
+            {{ cl.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+          {% for cl in classes %}
+          <option value="{{ cl.id }}" {% if selected_class|stringformat:'s' == cl.id|stringformat:'s' %}selected{% endif %}>
+            {{ cl.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Min Due Filter -->
+      <div style="width:170px; flex-shrink:0;">
+        <select name="min_due" class="form-select" style="height:38px; font-size:13px; border-radius:8px; width:100%;">
+          <option value="">Any Due Amount</option>
+          <option value="1000" {% if min_due == '1000' %}selected{% endif %}>₹1,000 & above</option>
+          <option value="2500" {% if min_due == '2500' %}selected{% endif %}>₹2,500 & above</option>
+          <option value="5000" {% if min_due == '5000' %}selected{% endif %}>₹5,000 & above</option>
+          <option value="10000" {% if min_due == '10000' %}selected{% endif %}>₹10,000 & above</option>
+        </select>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-shrink:0;">
+        <button type="submit" class="btn btn-primary btn-sm" style="height:38px; padding:0 16px; font-weight:700; white-space:nowrap;">
+          <i class="fa-solid fa-filter"></i> Apply Filter
+        </button>
+        {% if search or selected_class or min_due %}
+        <a href="{% url 'fees_defaulters' %}" class="btn btn-secondary btn-sm" style="height:38px; padding:0 14px; display:inline-flex; align-items:center; white-space:nowrap;">
+          <i class="fa-solid fa-xmark"></i> Clear
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Defaulters Table Card -->
+  <div class="card-panel" style="border:1px solid #e2e8f0; border-radius:12px; overflow:hidden;">
+    
+    <div style="padding:14px 18px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <div>
+        <h4 style="margin:0; font-size:1rem; font-weight:800; color:#0f172a;">
+          <i class="fa-solid fa-triangle-exclamation" style="color:#dc2626;"></i> Outstanding Fee Defaulters List
+        </h4>
+        <span style="font-size:0.8rem; color:#64748b;">
+          Showing {{ defaulters|length }} students with pending dues
+        </span>
+      </div>
+      <div style="font-size:12px; font-weight:700; color:#475569;">
+        Total Class Dues: <strong style="color:#dc2626; font-size:14px;">₹{{ total_school_due|floatformat:0 }}</strong>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="custom-table" style="margin:0; font-size:13px;">
+        <thead>
+          <tr>
+            <th class="freeze-action-col" style="text-align:center; min-width:230px;">Quick Actions</th>
+            <th style="width:50px; text-align:center;">#</th>
+            <th>Student Details</th>
+            <th style="text-align:right;">Total Due (₹)</th>
+            <th>Class & Sec</th>
+            <th>Parent / Guardian</th>
+            <th>Contact No</th>
+            <th>Pending Heads</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if defaulters %}
+            {% for d in defaulters %}
+            <tr style="border-bottom:1px solid #f1f5f9; transition:background 0.2s;">
+              <td class="freeze-action-col" style="text-align:center;">
+                <div style="display:inline-flex; gap:6px; align-items:center;">
+                  
+                  <!-- WhatsApp Reminder Button -->
+                  {% if d.clean_parent_phone %}
+                    <a href="https://api.whatsapp.com/send?phone={{ d.clean_parent_phone }}&text={{ d.whatsapp_text|urlencode }}" 
+                       target="_blank" 
+                       class="btn btn-sm" 
+                       title="Send Due Fee Notice on WhatsApp"
+                       style="background:#22c55e; color:#fff; font-size:11.5px; font-weight:700; padding:4px 9px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                      <i class="fa-brands fa-whatsapp" style="font-size:13px;"></i> WhatsApp
+                    </a>
+                  {% else %}
+                    <button disabled class="btn btn-sm" style="background:#f1f5f9; color:#94a3b8; font-size:11px; padding:4px 8px; border:none; cursor:not-allowed;">
+                      <i class="fa-brands fa-whatsapp"></i> No No.
+                    </button>
+                  {% endif %}
+
+                  <!-- Copy SMS Text Button -->
+                  <button type="button" 
+                          onclick="copySmsText('{{ d.whatsapp_text|escapejs }}', this)" 
+                          class="btn btn-sm btn-secondary" 
+                          title="Copy SMS / Notice Text"
+                          style="font-size:11.5px; padding:4px 8px; border-radius:6px;">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+
+                  <!-- Direct Fee Collection Counter Button -->
+                  <a href="{% url 'fee_counter' %}?student_id={{ d.student.id }}" 
+                     class="btn btn-sm" 
+                     title="Collect Fees at Fee Counter"
+                     style="background:#059669; color:#fff; font-size:11.5px; font-weight:700; padding:4px 10px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+                    <i class="fa-solid fa-cash-register"></i> Collect
+                  </a>
+
+                </div>
+              </td>
+              <td style="font-weight:700; color:#94a3b8; text-align:center;">
+                {{ forloop.counter }}
+              </td>
+              <td>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="width:34px; height:34px; border-radius:50%; background:#fee2e2; color:#dc2626; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px;">
+                    {{ d.student.first_name|slice:":1" }}
+                  </div>
+                  <div>
+                    <a href="{% url 'student_detail' d.student.id %}" style="font-weight:800; color:#0f172a; text-decoration:none; font-size:13.5px;">
+                      {{ d.student.full_name }}
+                    </a>
+                    <div style="font-size:11px; color:#64748b;">
+                      Adm: <strong>{{ d.student.admission_number }}</strong> | Roll: {{ d.student.roll_number }}
+                    </div>
+                  </div>
+                </div>
+              </td>
+              <td style="text-align:right;">
+                <span style="font-size:15px; font-weight:900; color:#dc2626;">
+                  ₹{{ d.due_amount|floatformat:0 }}
+                </span>
+              </td>
+              <td>
+                <span class="badge" style="background:#e0e7ff; color:#3730a3; font-weight:700; font-size:11.5px; padding:4px 8px;">
+                  {{ d.student.class_level.name }} - {{ d.student.section.name }}
+                </span>
+              </td>
+              <td>
+                <div style="font-weight:600; color:#334155;">{{ d.student.parent_name|default:"Parent" }}</div>
+                <div style="font-size:11px; color:#94a3b8;">Guardian</div>
+              </td>
+              <td>
+                <div style="font-weight:700; color:#0f172a;">
+                  {% if d.student.parent_phone %}
+                    <i class="fa-solid fa-phone" style="color:#059669; font-size:11px;"></i> {{ d.student.parent_phone }}
+                  {% else %}
+                    <span style="color:#cbd5e1;">Not available</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td>
+                <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                  {% for h in d.unpaid_heads %}
+                    <span style="background:#fee2e2; color:#991b1b; font-size:10.5px; font-weight:700; padding:2px 6px; border-radius:4px;">
+                      {{ h }}
+                    </span>
+                  {% empty %}
+                    <span style="background:#fee2e2; color:#991b1b; font-size:10.5px; font-weight:700; padding:2px 6px; border-radius:4px;">
+                      Fees Arrears
+                    </span>
+                  {% endfor %}
+                  {% if d.unpaid_count > 3 %}
+                    <span style="font-size:10.5px; color:#dc2626; font-weight:700;">+{{ d.unpaid_count|add:"-3" }} more</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="8" style="text-align:center; padding:3rem 1rem;">
+                <div style="max-width:360px; margin:0 auto; color:#64748b;">
+                  <i class="fa-solid fa-circle-check" style="font-size:44px; color:#10b981; margin-bottom:12px;"></i>
+                  <h4 style="color:#0f172a; font-weight:800; margin-bottom:6px;">No Outstanding Dues Found!</h4>
+                  <p style="font-size:13px; margin:0;">
+                    All students in this selection have cleared their fees, or no matching records match your filter criteria.
+                  </p>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Copy SMS Toast Notification -->
+<div id="copyToast" style="display:none; position:fixed; bottom:24px; right:24px; background:#0f172a; color:#fff; padding:12px 20px; border-radius:8px; box-shadow:0 8px 24px rgba(0,0,0,0.25); font-size:13px; font-weight:700; z-index:9999; display:flex; align-items:center; gap:10px;">
+  <i class="fa-solid fa-circle-check" style="color:#10b981; font-size:16px;"></i>
+  <span>WhatsApp / SMS Reminder text copied to clipboard!</span>
+</div>
+
+<script>
+function copySmsText(text, btn) {
+  navigator.clipboard.writeText(text).then(function() {
+    var toast = document.getElementById('copyToast');
+    toast.style.display = 'flex';
+    var origHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-check" style="color:#10b981;"></i>';
+    setTimeout(function() {
+      toast.style.display = 'none';
+      btn.innerHTML = origHtml;
+    }, 2500);
+  }).catch(function(err) {
+    alert("Could not copy text: " + err);
+  });
+}
+document.getElementById('copyToast').style.display = 'none';
+</script>
+
+<style>
+@media print {
+  body { background:#fff !important; }
+  .sidebar, .top-header, .header-actions, .badge-filter, form, .btn, #copyToast { display: none !important; }
+  .card-panel { box-shadow:none !important; border:1px solid #ccc !important; }
+  table { font-size:10px !important; }
+}
+</style>
+{% endblock %}

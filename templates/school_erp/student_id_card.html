@@ -1,0 +1,144 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}ID Card - {{ student.full_name }}{% endblock %}
+{% block page_title %}Print Student ID Card{% endblock %}
+
+{% block header_actions %}
+<div class="btn-no-print" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+  {% if clean_parent_phone %}
+  <a href="https://api.whatsapp.com/send?phone={{ clean_parent_phone }}&text={{ wa_message|urlencode }}" 
+     target="_blank" 
+     id="btnSendWhatsApp"
+     class="btn btn-sm" 
+     style="background:#22c55e; color:#fff; font-weight:800; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; box-shadow:0 2px 6px rgba(34,197,94,0.3);">
+    <i class="fa-brands fa-whatsapp" style="font-size:16px;"></i> Send on WhatsApp
+  </a>
+  {% else %}
+  <button type="button" onclick="promptCustomWhatsAppIdCard()" 
+          class="btn btn-sm" 
+          style="background:#22c55e; color:#fff; font-weight:800; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:6px; padding:6px 14px;">
+    <i class="fa-brands fa-whatsapp" style="font-size:16px;"></i> Send on WhatsApp
+  </button>
+  {% endif %}
+
+  <button type="button" onclick="navigator.clipboard.writeText('{{ public_slip_url }}'); alert('Official ID Card Link Copied: {{ public_slip_url }}');" 
+          class="btn btn-sm btn-dark" 
+          title="Parents can view this student ID card without login"
+          style="border-radius:6px; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:#0f172a; color:#fff;">
+    <i class="fa-solid fa-link"></i> Copy ID Card Link
+  </button>
+
+  <a href="{{ public_slip_url }}" target="_blank" class="btn btn-sm btn-secondary" style="border-radius:6px; font-weight:700;">
+    <i class="fa-solid fa-arrow-up-right-from-square"></i> Parent View
+  </a>
+
+  <a href="{% url 'student_detail' student.pk %}" class="btn btn-secondary btn-sm" style="border-radius:6px;">Back to Profile</a>
+
+  <button onclick="window.print()" class="btn btn-primary btn-sm" style="background:#0f172a; border-color:#0f172a; font-weight:800; border-radius:6px; padding:6px 14px;">
+    <i class="fa-solid fa-print"></i> Print ID Card
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- WhatsApp Parent Access Notice Banner -->
+<div class="btn-no-print" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 18px; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+  <div style="display:flex; align-items:center; gap:12px;">
+    <div style="width:38px; height:38px; border-radius:50%; background:#22c55e; color:white; display:flex; align-items:center; justify-content:center; font-size:1.3rem;">
+      <i class="fa-brands fa-whatsapp"></i>
+    </div>
+    <div>
+      <div style="font-weight:800; color:#15803d; font-size:0.95rem;">Instant WhatsApp Parent Student ID Card Ready</div>
+      <div style="font-size:0.82rem; color:#166534;">
+        Parents can view, download, or verify this student identity card directly on mobile <strong>without entering any login</strong>.
+      </div>
+    </div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    {% if clean_parent_phone %}
+    <a href="https://api.whatsapp.com/send?phone={{ clean_parent_phone }}&text={{ wa_message|urlencode }}" target="_blank" class="btn btn-sm" style="background:#22c55e; color:white; font-weight:700;">
+      <i class="fa-brands fa-whatsapp"></i> Send to Parent ({{ student.parent_phone }})
+    </a>
+    {% else %}
+    <button type="button" onclick="promptCustomWhatsAppIdCard()" class="btn btn-sm" style="background:#22c55e; color:white; font-weight:700;">
+      <i class="fa-brands fa-whatsapp"></i> Share on WhatsApp
+    </button>
+    {% endif %}
+    <button type="button" onclick="navigator.clipboard.writeText('{{ public_slip_url }}'); alert('ID Card Link Copied: {{ public_slip_url }}');" class="btn btn-sm btn-secondary">
+      <i class="fa-solid fa-copy"></i> Copy Link
+    </button>
+  </div>
+</div>
+
+<div class="printable-container" style="background:transparent; border:none; box-shadow:none; padding:0;">
+  <!-- Front ID Card -->
+  <div class="id-card-wrap">
+    <div class="id-card-header" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+      {% if school.logo %}
+      <img src="{{ school.logo.url }}" alt="{{ school.name }}" style="width:30px; height:30px; object-fit:contain; border-radius:4px; background:#fff; padding:1px;">
+      {% endif %}
+      <div>
+        <h3 style="margin:0;">{{ school.name }}</h3>
+        <p style="margin:0;">{{ school.tagline|default:school.affiliation_number }}</p>
+      </div>
+    </div>
+
+    <div class="id-card-body">
+      <div class="id-avatar">
+        <i class="fa-solid fa-user-graduate"></i>
+      </div>
+      <div class="id-details">
+        <h4 style="font-size:1.1rem; font-weight:800; color:#0f172a; margin-bottom:4px;">{{ student.full_name }}</h4>
+        <p><strong>Adm No:</strong> {{ student.admission_number }}</p>
+        <p><strong>Class:</strong> {{ student.class_level.name }} - Sec {{ student.section.name }}</p>
+        <p><strong>Roll No:</strong> #{{ student.roll_number }}</p>
+        <p><strong>Blood Group:</strong> <span class="badge" style="background:#fee2e2; color:#991b1b; padding:2px 6px;">{{ student.blood_group }}</span></p>
+        <p><strong>DOB:</strong> {{ student.dob|date:"d M Y" }}</p>
+      </div>
+    </div>
+
+    <div class="id-card-footer">
+      <div>
+        <div class="id-barcode">|||| ||| ||||| |||| || |||</div>
+        <span style="font-size:0.65rem; color:#64748b;">VALID: {{ school.academic_year }}</span>
+      </div>
+      <div class="id-signature" style="text-align:center;">
+        {% if school.principal_signature %}
+        <img src="{{ school.principal_signature.url }}" alt="Principal Signature" style="height:22px; max-width:80px; object-fit:contain; display:block; margin:0 auto 2px auto;">
+        {% else %}
+        <div style="font-family:'Brush Script MT', cursive; font-size:1.1rem; color:#1e293b;">{{ school.principal_name|default:"Principal" }}</div>
+        {% endif %}
+        <span style="border-top:1px solid #94a3b8; display:block; padding-top:2px;">Principal Seal</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Back of ID Card -->
+  <div class="id-card-wrap" style="margin-top:1rem; border-style:dashed;">
+    <div style="background:#f1f5f9; padding:10px; text-align:center; border-bottom:1px solid #e2e8f0;">
+      <span style="font-size:0.75rem; font-weight:700; color:#475569; text-transform:uppercase;">Emergency & Contact Information</span>
+    </div>
+    <div style="padding:14px; font-size:0.78rem; color:#334155;">
+      <p style="margin-bottom:6px;"><strong>Parent:</strong> {{ student.parent_name }} ({{ student.parent_relation }})</p>
+      <p style="margin-bottom:6px;"><strong>Emergency Contact:</strong> {{ student.emergency_contact|default:student.parent_phone }}</p>
+      <p style="margin-bottom:6px;"><strong>Address:</strong> {{ student.address }}</p>
+      <p style="margin-bottom:10px;"><strong>Campus Phone:</strong> {{ school.phone }}</p>
+      <hr style="border:none; border-top:1px dashed #cbd5e1; margin:8px 0;">
+      <p style="font-size:0.7rem; color:#64748b; text-align:center; font-style:italic;">
+        This card is property of {{ school.name }}. If found, please return to school campus or call the office.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+function promptCustomWhatsAppIdCard() {
+  const phone = prompt("Enter parent's 10-digit WhatsApp phone number:", "{{ student.parent_phone|default:'' }}");
+  if (!phone) return;
+  const clean = phone.replace(/[^0-9]/g, '');
+  const formatted = clean.length === 10 ? '91' + clean : clean;
+  const msg = encodeURIComponent(`{{ wa_message|escapejs }}`);
+  window.open(`https://api.whatsapp.com/send?phone=${formatted}&text=${msg}`, '_blank');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,181 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Fee Receipt - {{ payment.receipt_number }}{% endblock %}
+{% block page_title %}Official Payment Receipt{% endblock %}
+
+{% block header_actions %}
+<div class="btn-no-print" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+  {% if clean_parent_phone %}
+  <a href="https://api.whatsapp.com/send?phone={{ clean_parent_phone }}&text={{ wa_message|urlencode }}" 
+     target="_blank" 
+     id="btnSendWhatsApp"
+     class="btn btn-sm" 
+     style="background:#22c55e; color:#fff; font-weight:800; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:6px; padding:6px 14px; box-shadow:0 2px 6px rgba(34,197,94,0.3);">
+    <i class="fa-brands fa-whatsapp" style="font-size:16px;"></i> Send on WhatsApp
+  </a>
+  {% else %}
+  <button type="button" onclick="promptCustomWhatsApp()" 
+          class="btn btn-sm" 
+          style="background:#22c55e; color:#fff; font-weight:800; border:none; border-radius:6px; display:inline-flex; align-items:center; gap:6px; padding:6px 14px;">
+    <i class="fa-brands fa-whatsapp" style="font-size:16px;"></i> Send on WhatsApp
+  </button>
+  {% endif %}
+
+  <button type="button" onclick="navigator.clipboard.writeText('{{ public_slip_url }}'); alert('Official Slip Link Copied: {{ public_slip_url }}');" 
+          class="btn btn-sm btn-dark" 
+          title="Parents can view this link without login"
+          style="border-radius:6px; font-weight:700; display:inline-flex; align-items:center; gap:6px; padding:6px 12px; background:#0f172a; color:#fff;">
+    <i class="fa-solid fa-link"></i> Copy Slip Link
+  </button>
+
+  <a href="{{ public_slip_url }}" target="_blank" class="btn btn-sm btn-secondary" style="border-radius:6px; font-weight:700;">
+    <i class="fa-solid fa-arrow-up-right-from-square"></i> Parent View
+  </a>
+
+  <a href="{% url 'fees_list' %}" class="btn btn-secondary btn-sm" style="border-radius:6px;">Back to Fees</a>
+
+  <button onclick="window.print()" class="btn btn-primary btn-sm" style="background:#0f172a; border-color:#0f172a; font-weight:800; border-radius:6px; padding:6px 14px;">
+    <i class="fa-solid fa-print"></i> Print Official Receipt
+  </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- WhatsApp & Parent Access Notice Banner -->
+<div class="btn-no-print" style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:12px 18px; margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+  <div style="display:flex; align-items:center; gap:12px;">
+    <div style="width:38px; height:38px; border-radius:50%; background:#22c55e; color:white; display:flex; align-items:center; justify-content:center; font-size:1.3rem;">
+      <i class="fa-brands fa-whatsapp"></i>
+    </div>
+    <div>
+      <div style="font-weight:800; color:#15803d; font-size:0.95rem;">Instant WhatsApp Parent Slip Ready</div>
+      <div style="font-size:0.82rem; color:#166534;">
+        Parents can view and verify this fee payment receipt directly on their phone <strong>without entering any password or login</strong>.
+      </div>
+    </div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    {% if clean_parent_phone %}
+    <a href="https://api.whatsapp.com/send?phone={{ clean_parent_phone }}&text={{ wa_message|urlencode }}" target="_blank" class="btn btn-sm" style="background:#22c55e; color:white; font-weight:700;">
+      <i class="fa-brands fa-whatsapp"></i> Send to Parent ({{ student.parent_phone }})
+    </a>
+    {% else %}
+    <button type="button" onclick="promptCustomWhatsApp()" class="btn btn-sm" style="background:#22c55e; color:white; font-weight:700;">
+      <i class="fa-brands fa-whatsapp"></i> Share on WhatsApp
+    </button>
+    {% endif %}
+    <button type="button" onclick="navigator.clipboard.writeText('{{ public_slip_url }}'); alert('Slip Link Copied: {{ public_slip_url }}');" class="btn btn-sm btn-secondary">
+      <i class="fa-solid fa-copy"></i> Copy Link
+    </button>
+  </div>
+</div>
+
+<div class="printable-container">
+  <!-- School Header -->
+  <div class="school-header-print">
+    <div style="display:inline-block; width:50px; height:50px; border-radius:10px; background:#1e1b4b; color:#fff; line-height:50px; font-size:1.6rem; font-weight:800; margin-bottom:6px;">
+      SRS
+    </div>
+    <h1>{{ school.name }}</h1>
+    <p>{{ school.tagline }}</p>
+    <p style="font-size:0.78rem;">{{ school.address }} • Phone: {{ school.phone }}</p>
+    <p style="font-size:0.75rem; color:#64748b;">Affiliation No: {{ school.affiliation_number }} | School Code: {{ school.school_code }}</p>
+  </div>
+
+  <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0f172a; padding-bottom:8px; margin-bottom:1.25rem;">
+    <h3 style="font-size:1.1rem; font-weight:800; text-transform:uppercase; color:#0f172a; letter-spacing:0.04em;">
+      Student Fee Payment Receipt
+    </h3>
+    <span style="font-size:0.85rem; font-weight:700; color:var(--primary);">
+      ACADEMIC SESSION: {{ school.academic_year }}
+    </span>
+  </div>
+
+  <!-- Receipt & Student Details Box -->
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1.25rem; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:1.25rem; margin-bottom:1.5rem; font-size:0.88rem;">
+    <div>
+      <p style="margin-bottom:6px;"><strong>Receipt No:</strong> <span style="color:var(--primary); font-weight:800;">{{ payment.receipt_number }}</span></p>
+      <p style="margin-bottom:6px;"><strong>Payment Date:</strong> {{ payment.payment_date|date:"d F Y" }}</p>
+      <p style="margin-bottom:6px;"><strong>Payment Mode:</strong> {{ payment.payment_method }}</p>
+      {% if payment.transaction_reference %}
+      <p style="margin-bottom:6px;"><strong>Transaction Ref:</strong> {{ payment.transaction_reference }}</p>
+      {% endif %}
+    </div>
+
+    <div>
+      <p style="margin-bottom:6px;"><strong>Student Name:</strong> <span style="font-weight:800; color:#0f172a;">{{ student.full_name }}</span></p>
+      <p style="margin-bottom:6px;"><strong>Admission No:</strong> {{ student.admission_number }}</p>
+      <p style="margin-bottom:6px;"><strong>Class & Section:</strong> {{ student.class_level.name }} - Sec {{ student.section.name }}</p>
+      <p style="margin-bottom:6px;"><strong>Parent Contact:</strong> {{ student.parent_name }} ({{ student.parent_phone }})</p>
+    </div>
+  </div>
+
+  <!-- Breakdown Table -->
+  <table class="custom-table" style="margin-bottom:1.5rem;">
+    <thead>
+      <tr>
+        <th>S.No.</th>
+        <th>Particulars / Fee Description</th>
+        <th>Invoice Number</th>
+        <th style="text-align:right;">Amount Paid</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>
+          <strong>{{ invoice.fee_category.name }}</strong>
+          {% if payment.notes %}<div style="font-size:0.75rem; color:#64748b;">Note: {{ payment.notes }}</div>{% endif %}
+        </td>
+        <td>{{ invoice.invoice_number }}</td>
+        <td style="text-align:right; font-weight:800; font-size:1.1rem; color:#0f172a;">
+          {{ school.currency_symbol }}{{ payment.amount_paid|floatformat:2 }}
+        </td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr style="background:#f8fafc; font-weight:700;">
+        <td colspan="3" style="text-align:right;">Total Amount Received:</td>
+        <td style="text-align:right; font-size:1.2rem; color:#065f46; font-weight:800;">
+          {{ school.currency_symbol }}{{ payment.amount_paid|floatformat:2 }}
+        </td>
+      </tr>
+      <tr>
+        <td colspan="3" style="text-align:right; font-size:0.85rem; color:#64748b;">Remaining Balance Due on Invoice:</td>
+        <td style="text-align:right; font-size:0.95rem; color:#991b1b; font-weight:700;">
+          {{ school.currency_symbol }}{{ invoice.remaining_due|floatformat:2 }}
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Receipt Terms & Signatures -->
+  <div style="margin-top:2.5rem; display:flex; justify-content:space-between; align-items:flex-end; padding-top:2rem;">
+    <div style="font-size:0.72rem; color:#64748b; max-width:320px;">
+      <p>• Fees once paid are non-refundable & non-transferable.</p>
+      <p>• This is a computer generated official fee receipt.</p>
+      <p>• Generated on: {% now "d M Y, h:i A" %}</p>
+    </div>
+
+    <div style="text-align:center; min-width:180px;">
+      <div style="font-family:'Brush Script MT', cursive; font-size:1.4rem; color:#1e293b; margin-bottom:4px;">
+        Accountant SRS
+      </div>
+      <div style="border-top:1px solid #334155; padding-top:4px; font-size:0.78rem; font-weight:700; color:#334155;">
+        Cashier / Authorized Signatory
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function promptCustomWhatsApp() {
+  const phone = prompt("Enter parent's 10-digit WhatsApp phone number:", "{{ student.parent_phone|default:'' }}");
+  if (!phone) return;
+  const clean = phone.replace(/[^0-9]/g, '');
+  const formatted = clean.length === 10 ? '91' + clean : clean;
+  const msg = encodeURIComponent(`{{ wa_message|escapejs }}`);
+  window.open(`https://api.whatsapp.com/send?phone=${formatted}&text=${msg}`, '_blank');
+}
+</script>
+{% endblock %}

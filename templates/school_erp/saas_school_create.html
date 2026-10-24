@@ -1,0 +1,321 @@
+{% extends 'school_erp/saas_base.html' %}
+{% load static %}
+
+{% block title %}Onboard New School Tenant • SaaS Platform Admin{% endblock %}
+{% block page_title %}
+  <a href="{% url 'saas_admin_dashboard' %}" style="color:#64748b; text-decoration:none; font-size:16px; margin-right:8px;" title="Back to Dashboard">
+    <i class="fa-solid fa-arrow-left"></i>
+  </a>
+  <i class="fa-solid fa-school-flag" style="color:#2563eb; margin-right:8px;"></i> Onboard New School Tenant
+{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'saas_admin_dashboard' %}" class="btn btn-secondary">
+  <i class="fa-solid fa-xmark"></i> Cancel & Return
+</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 980px; margin: 0 auto;">
+
+  <!-- Form Introduction Hero Card -->
+  <div style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); color:#ffffff; border-radius:16px; padding:24px 28px; margin-bottom:24px; box-shadow:0 10px 25px rgba(15,23,42,0.15); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+    <div>
+      <span style="background:rgba(59,130,246,0.3); color:#93c5fd; padding:4px 10px; border-radius:20px; font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; display:inline-block; margin-bottom:8px;">
+        <i class="fa-solid fa-crown" style="color:#f59e0b;"></i> SaaS Master Registration
+      </span>
+      <h2 style="font-family:'Outfit',sans-serif; font-size:22px; font-weight:800; margin:0 0 6px 0; color:#fff;">
+        Register a New School on the Platform
+      </h2>
+      <p style="margin:0; font-size:13.5px; color:#cbd5e1; max-width:620px;">
+        Onboard a tenant school, lock their baseline academic session, set the ₹499/mo subscription, and generate their primary administrator credentials.
+      </p>
+    </div>
+    <div style="text-align:right;">
+      <div style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); border-radius:12px; padding:12px 18px; text-align:center;">
+        <span style="font-size:11px; color:#93c5fd; text-transform:uppercase; font-weight:700; display:block;">Monthly Charge</span>
+        <strong style="font-size:22px; color:#ffffff;">₹499<span style="font-size:12px; color:#93c5fd;"> / month</span></strong>
+      </div>
+    </div>
+  </div>
+
+  <form method="POST" action="{% url 'saas_school_create' %}" id="onboardingForm">
+    {% csrf_token %}
+
+    <!-- ========================================================================= -->
+    <!-- SECTION 1: SCHOOL IDENTITY & CONTACT DETAILS                              -->
+    <!-- ========================================================================= -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:22px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#eff6ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          1
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">School Identity & General Profile</h3>
+          <span style="font-size:12px; color:#64748b;">Official information displayed on certificates, fee receipts, and ID cards</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">Full Official School Name *</label>
+          <input type="text" name="name" class="form-input" placeholder="e.g. Modern Heritage International School" required>
+        </div>
+        <div>
+          <label class="form-label">Short Display Name</label>
+          <input type="text" name="short_name" class="form-input" placeholder="e.g. Heritage School">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">School Code (Unique) *</label>
+          <input type="text" name="school_code" id="schoolCodeInput" class="form-input" placeholder="e.g. HERITAGE-01" style="text-transform:uppercase; font-weight:700;" required>
+          <span style="font-size:11px; color:#64748b;">Used as unique tenant identifier</span>
+        </div>
+        <div>
+          <label class="form-label">Education Board</label>
+          <select name="board" class="form-select no-select2" style="font-weight:600;">
+            <option value="CBSE" selected>CBSE (Central Board)</option>
+            <option value="ICSE">ICSE / ISC</option>
+            <option value="State Board">State Government Board</option>
+            <option value="IB">IB (International Baccalaureate)</option>
+            <option value="Cambridge">Cambridge (IGCSE)</option>
+            <option value="Other">Other / Independent</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">Affiliation / Reg Number</label>
+          <input type="text" name="affiliation_number" class="form-input" placeholder="e.g. CBSE-AFF/2026/8940">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">Official Email Address</label>
+          <input type="email" name="email" class="form-input" placeholder="office@school.edu.in">
+        </div>
+        <div>
+          <label class="form-label">Contact Phone / Landline</label>
+          <input type="text" name="phone" class="form-input" placeholder="+91 98765 43210">
+        </div>
+        <div>
+          <label class="form-label">Principal / Director Name</label>
+          <input type="text" name="principal_name" class="form-input" placeholder="e.g. Dr. Ramesh Gupta">
+        </div>
+      </div>
+
+      <div>
+        <label class="form-label">Complete Postal Campus Address (Prints on Slips)</label>
+        <textarea name="address" class="form-textarea" rows="2" placeholder="Full street address, city, district, state & pin code..."></textarea>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SECTION 2: ANCHOR ACADEMIC SESSION BASELINE LOCK                         -->
+    <!-- ========================================================================= -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:22px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#fffbeb; color:#d97706; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          2
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">
+            <i class="fa-solid fa-lock" style="color:#d97706; font-size:13px; margin-right:4px;"></i> Anchor Academic Session Baseline Lock
+          </h3>
+          <span style="font-size:12px; color:#64748b;">The starting session for this school. School cannot create past sessions.</span>
+        </div>
+      </div>
+
+      <!-- Golden Policy Notice -->
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:14px 16px; margin-bottom:18px; display:flex; gap:12px; align-items:flex-start;">
+        <i class="fa-solid fa-shield-halved" style="color:#d97706; font-size:18px; margin-top:2px;"></i>
+        <div style="font-size:12.5px; color:#92400e; line-height:1.5;">
+          <strong>Strict Forward-Only Policy:</strong> The session entered below will be set as this school's registration baseline. 
+          The school admin will be able to create future sessions (e.g. 2027-2028), but <strong>any attempt to add previous/past sessions will be automatically blocked</strong> by the platform.
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+        <div>
+          <label class="form-label" style="font-weight:700;">Registration Anchor Session Name *</label>
+          <input type="text" name="session_name" value="2026-2027" class="form-input" style="font-weight:800; color:#1e40af;" required>
+          <span style="font-size:11px; color:#64748b;">e.g. 2026-2027</span>
+        </div>
+        <div>
+          <label class="form-label" style="font-weight:700;">Anchor Session Start Date *</label>
+          <input type="date" name="session_start_date" value="2026-04-01" class="form-input" style="font-weight:700;" required>
+          <span style="font-size:11px; color:#64748b;">Baseline cutoff date</span>
+        </div>
+        <div>
+          <label class="form-label" style="font-weight:700;">Anchor Session End Date *</label>
+          <input type="date" name="session_end_date" value="2027-03-31" class="form-input" style="font-weight:700;" required>
+          <span style="font-size:11px; color:#64748b;">Fiscal / academic year end</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SECTION 3: SUBSCRIPTION & MONTHLY BILLING                                 -->
+    <!-- ========================================================================= -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:22px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#ecfdf5; color:#059669; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          3
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">
+            <i class="fa-solid fa-circle-dollar-to-slot" style="color:#059669; font-size:13px; margin-right:4px;"></i> Subscription & Monthly Billing Plan
+          </h3>
+          <span style="font-size:12px; color:#64748b;">Monthly charges (₹499/mo) and initial validity duration</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+          <label class="form-label" style="font-weight:800; color:#0f172a;">Monthly Subscription Charge (₹) *</label>
+          <div style="position:relative;">
+            <span style="position:absolute; left:12px; top:10px; font-weight:800; color:#64748b; font-size:15px;">₹</span>
+            <input type="number" step="0.01" name="subscription_fee" value="499.00" class="form-input" style="padding-left:28px; font-size:16px; font-weight:800; color:#059669;" required>
+          </div>
+          <span style="font-size:11.5px; color:#64748b; display:block; margin-top:6px;">Standard recurring fee charged every 30 days.</span>
+        </div>
+
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+          <label class="form-label" style="font-weight:800; color:#0f172a;">Initial Active Validity Period *</label>
+          <select name="subscription_days" class="form-select no-select2" style="font-weight:700; height:42px;">
+            <option value="30" selected>30 Days (1 Month) — First ₹499 Paid</option>
+            <option value="60">60 Days (2 Months) — ₹998 Paid</option>
+            <option value="90">90 Days (Quarterly) — ₹1,497 Paid</option>
+            <option value="180">180 Days (Half-Yearly)</option>
+            <option value="365">365 Days (1 Full Year)</option>
+          </select>
+          <span style="font-size:11.5px; color:#64748b; display:block; margin-top:6px;">Countdown will start from today.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SECTION 4: SCHOOL ADMIN ACCOUNT CREDENTIALS                               -->
+    <!-- ========================================================================= -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:24px 28px; margin-bottom:28px; box-shadow:0 2px 8px rgba(0,0,0,0.02);">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid #f1f5f9;">
+        <div style="width:34px; height:34px; border-radius:8px; background:#f5f3ff; color:#7c3aed; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:800;">
+          4
+        </div>
+        <div>
+          <h3 style="margin:0; font-size:15px; font-weight:800; color:#0f172a;">
+            <i class="fa-solid fa-user-shield" style="color:#7c3aed; font-size:13px; margin-right:4px;"></i> School Administrator Login Credentials
+          </h3>
+          <span style="font-size:12px; color:#64748b;">Credentials provided to the school to log in and manage their ERP</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div>
+          <label class="form-label">Admin Full Name</label>
+          <input type="text" name="admin_name" class="form-input" placeholder="e.g. School Principal / Manager">
+        </div>
+        <div>
+          <label class="form-label">Admin Login Username *</label>
+          <input type="text" name="admin_username" id="adminUsernameInput" class="form-input" placeholder="e.g. heritage_admin" style="font-weight:700;" required>
+          <span style="font-size:11px; color:#64748b;">Must be unique across the platform</span>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+        <div>
+          <label class="form-label">Admin Contact Email</label>
+          <input type="email" name="admin_email" class="form-input" placeholder="admin@school.edu.in">
+        </div>
+
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <label class="form-label" style="margin:0;">Initial Login Password *</label>
+            <button type="button" onclick="generateSchoolPassword()" style="background:none; border:none; color:#2563eb; font-size:11.5px; font-weight:700; cursor:pointer; padding:0;">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Password
+            </button>
+          </div>
+          <div style="position:relative;">
+            <input type="text" name="admin_password" id="adminPasswordInput" class="form-input" placeholder="Enter or generate password" required style="font-family:monospace; font-size:14px; font-weight:700; padding-right:75px;">
+            <button type="button" onclick="copySchoolPassword()" style="position:absolute; right:6px; top:5px; padding:4px 8px; font-size:11.5px; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; color:#334155; cursor:pointer; font-weight:700;">
+              <i class="fa-solid fa-copy"></i> Copy
+            </button>
+          </div>
+          <span id="copyMsg" style="font-size:11px; color:#059669; font-weight:700; display:none; margin-top:4px;">
+            <i class="fa-solid fa-check"></i> Password copied! Share this with the school.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- SUBMIT ACTIONS BAR                                                        -->
+    <!-- ========================================================================= -->
+    <div style="background:#ffffff; border-radius:14px; border:1px solid #e2e8f0; padding:20px 28px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 4px 12px rgba(0,0,0,0.03);">
+      <a href="{% url 'saas_admin_dashboard' %}" class="btn btn-secondary" style="font-weight:700;">
+        <i class="fa-solid fa-arrow-left"></i> Cancel & Back
+      </a>
+
+      <button type="submit" class="btn btn-primary" style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); font-weight:800; padding:12px 32px; font-size:14px; box-shadow:0 4px 14px rgba(37,99,235,0.3);">
+        <i class="fa-solid fa-check-circle" style="font-size:16px;"></i> Complete Onboarding & Activate School
+      </button>
+    </div>
+
+  </form>
+
+</div>
+
+<script>
+  // Auto-suggest admin username from school code
+  const codeInput = document.getElementById('schoolCodeInput');
+  const userInput = document.getElementById('adminUsernameInput');
+
+  codeInput.addEventListener('input', function() {
+    if (!userInput.value || userInput.value.startsWith('admin_')) {
+      const clean = codeInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (clean) {
+        userInput.value = 'admin_' + clean;
+      }
+    }
+  });
+
+  // Password Generator
+  function generateSchoolPassword() {
+    const chars = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const specials = "@#$!";
+    let pass = "";
+    for (let i = 0; i < 6; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    pass += specials.charAt(Math.floor(Math.random() * specials.length));
+    pass += Math.floor(100 + Math.random() * 900);
+    pass += "!";
+    document.getElementById('adminPasswordInput').value = pass;
+    document.getElementById('copyMsg').style.display = 'none';
+  }
+
+  // Copy Password
+  function copySchoolPassword() {
+    const pass = document.getElementById('adminPasswordInput');
+    if (!pass.value) {
+      generateSchoolPassword();
+    }
+    navigator.clipboard.writeText(pass.value).then(() => {
+      document.getElementById('copyMsg').style.display = 'block';
+      setTimeout(() => {
+        document.getElementById('copyMsg').style.display = 'none';
+      }, 3500);
+    }).catch(() => {
+      pass.select();
+      document.execCommand('copy');
+      document.getElementById('copyMsg').style.display = 'block';
+    });
+  }
+
+  // Pre-generate a strong password by default on page load
+  window.addEventListener('DOMContentLoaded', () => {
+    generateSchoolPassword();
+  });
+</script>
+{% endblock %}
