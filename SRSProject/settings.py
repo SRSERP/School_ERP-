@@ -28,6 +28,9 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 CSRF_TRUSTED_ORIGINS = [
+    'https://vssmilebloomdental.com',
+    'http://vssmilebloomdental.com',
+    'https://*.vssmilebloomdental.com',
     'https://schoolerp.srsinfoconnect.com',
     'http://schoolerp.srsinfoconnect.com',
     'https://*.srsinfoconnect.com',

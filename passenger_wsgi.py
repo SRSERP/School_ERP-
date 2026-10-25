@@ -5,13 +5,18 @@ SRS School ERP Multi-Tenant SaaS Platform
 import os
 import sys
 
-BASE_DIR = '/home/srsinfoconnect/School_ERP'
+# Automatically set base directory to the folder containing this file
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-venv_site_packages = '/home/srsinfoconnect/virtualenv/School_ERP/3.11/lib/python3.11/site-packages'
-if os.path.exists(venv_site_packages) and venv_site_packages not in sys.path:
-    sys.path.insert(0, venv_site_packages)
+# Fallback for explicit virtualenv paths if needed
+for venv_path in [
+    os.path.join(os.path.expanduser('~'), 'virtualenv', os.path.basename(BASE_DIR), '3.11', 'lib', 'python3.11', 'site-packages'),
+    '/home/srsinfoconnect/virtualenv/School_ERP/3.11/lib/python3.11/site-packages',
+]:
+    if os.path.exists(venv_path) and venv_path not in sys.path:
+        sys.path.insert(0, venv_path)
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'SRSProject.settings')
 
