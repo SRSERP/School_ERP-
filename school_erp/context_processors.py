@@ -117,7 +117,7 @@ def school_context(request):
             is_superadmin = True
             user_role = "Platform Super Admin"
         elif profile_obj:
-            user_role = profile_obj.get_role_display() if hasattr(profile_obj, 'get_role_display') else profile_obj.role
+            user_role = profile_obj.role_obj.name if profile_obj.role_obj else (profile_obj.get_role_display() if hasattr(profile_obj, 'get_role_display') else profile_obj.role)
             perms = {
                 'can_manage_students': profile_obj.can_manage_students,
                 'can_manage_attendance': profile_obj.can_manage_attendance,

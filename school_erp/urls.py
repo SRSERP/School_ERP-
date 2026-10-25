@@ -34,18 +34,29 @@ urlpatterns = [
     path('attendance/', views.attendance_view, name='attendance'),
     path('attendance/report/', views.attendance_report_view, name='attendance_report'),
     
-    # Fees & Accounting
+    # Fees & Accounting Enterprise Suite
     path('fees/', views.fees_dashboard_view, name='fees_dashboard'),
     path('fees/dashboard/', views.fees_dashboard_view, name='fees_dashboard_alias'),
-    path('fees/ledger/', views.fees_list_view, name='fees_list'),
+    path('fees/heads/', views.fee_heads_master_view, name='fee_heads_master'),
+    path('fees/structure/', views.fee_structure_view, name='fee_structure'),
     path('fees/counter/', views.fee_counter_view, name='fee_counter'),
-    path('fees/master/', views.class_fee_master_view, name='class_fee_master'),
+    path('fees/student-ledger/', views.student_ledger_view, name='student_ledger'),
+    path('fees/student-ledger/<int:student_id>/', views.student_ledger_view, name='student_ledger_detail'),
+    path('fees/student-ledger/<int:student_id>/export-excel/', views.export_student_ledger_excel, name='export_student_ledger_excel'),
+    path('fees/receipts/', views.fee_receipts_list_view, name='fee_receipts_list'),
+    path('fees/receipt/<int:receipt_id>/cancel/', views.fee_receipt_cancel_view, name='fee_receipt_cancel'),
+    path('fees/refunds/', views.fee_refunds_view, name='fee_refunds'),
+    path('fees/refund/<int:refund_id>/<str:action>/', views.fee_refund_action_view, name='fee_refund_action'),
+    path('fees/reconciliation/', views.fee_reconciliation_view, name='fee_reconciliation'),
     path('fees/defaulters/', views.fees_defaulters_view, name='fees_defaulters'),
+    path('fees/defaulters/<int:student_id>/send-reminder/', views.fee_send_reminder_view, name='fee_send_reminder'),
+    path('fees/defaulters/export-excel/', views.export_defaulters_excel_view, name='export_defaulters_excel'),
+    path('fees/master/', views.class_fee_master_view, name='class_fee_master'),
+    path('fees/ledger/', views.fees_list_view, name='fees_list'),
     path('fees/invoice/new/', views.fee_invoice_create_view, name='fee_invoice_create'),
     path('fees/invoice/<int:invoice_id>/pay/', views.fee_collect_view, name='fee_collect'),
     path('fees/receipt/<int:payment_id>/', views.fee_receipt_view, name='fee_receipt'),
     path('fees/receipt/unified/<int:receipt_id>/', views.unified_receipt_view, name='unified_receipt'),
-    path('fees/defaulters/export-excel/', views.export_defaulters_excel_view, name='export_defaulters_excel'),
     
     # Public Slips for Parents (Accessible without login)
     path('slip/receipt/<str:receipt_number>/', views.public_fee_receipt_view, name='public_fee_receipt'),
@@ -82,8 +93,18 @@ urlpatterns = [
     # Staff User Registration & Role/Menu Permissions
     path('users/', views.user_list_view, name='user_list'),
     path('users/new/', views.user_create_view, name='user_create'),
-    path('users/<int:pk>/edit/', views.user_edit_view, name='user_edit'),
-    path('users/<int:pk>/toggle-status/', views.user_toggle_status_view, name='user_toggle_status'),
+    path('users/<int:user_id>/edit/', views.user_edit_view, name='user_edit'),
+    path('users/<int:user_id>/toggle-status/', views.user_toggle_status_view, name='user_toggle_status'),
+
+    # Role Master & Granular Permission Matrix
+    path('roles/', views.roles_master_view, name='roles_master'),
+    path('roles/matrix/', views.permission_matrix_view, name='permission_matrix'),
+    path('roles/<int:role_id>/matrix/', views.permission_matrix_view, name='role_permission_matrix'),
+
+    # Audit Trail & Sensitive Approval Queue
+    path('audit-logs/', views.audit_logs_view, name='audit_logs'),
+    path('audit-logs/<int:log_id>/<str:action>/', views.audit_log_action_view, name='audit_log_action'),
+    path('audit-logs/export/excel/', views.export_audit_logs_excel, name='export_audit_logs_excel'),
 
     # SaaS Platform Super Admin & Tenant Controls
     path('saas-admin/', views.saas_admin_dashboard_view, name='saas_admin_dashboard'),
@@ -96,6 +117,29 @@ urlpatterns = [
 
     # School Profile & Logo Branding Settings
     path('school/settings/', views.school_settings_view, name='school_settings'),
+
+    # Backup & Restore Console
+    path('backup/config/', views.backup_config_view, name='backup_config'),
+    path('backup/history/', views.backup_history_view, name='backup_history'),
+    path('backup/run/', views.backup_run_view, name='backup_run'),
+    path('backup/download/<int:backup_id>/', views.backup_download_view, name='backup_download'),
+    path('backup/restore/', views.backup_restore_view, name='backup_restore'),
+    path('backup/restore/test/<int:backup_id>/', views.backup_restore_test_view, name='backup_restore_test'),
+
+    # Security Settings & Compliance
+    path('security/settings/', views.security_settings_view, name='security_settings'),
+
+    # Branch Master & Multi-Branch
+    path('branches/', views.branch_master_view, name='branch_master'),
+    path('branches/new/', views.branch_create_view, name='branch_create'),
+    path('branches/<int:branch_id>/edit/', views.branch_edit_view, name='branch_edit'),
+    path('branches/<int:branch_id>/toggle/', views.branch_toggle_view, name='branch_toggle'),
+
+    # Promotion Wizard
+    path('students/promotion-wizard/', views.promotion_wizard_view, name='promotion_wizard'),
+
+    # Consolidated Management Reports
+    path('reports/consolidated/', views.consolidated_report_view, name='consolidated_report'),
 
     # Auth
     path('login/', views.user_login_view, name='user_login'),

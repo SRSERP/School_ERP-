@@ -3,7 +3,8 @@ from django.db.models import Q
 from .models import (
     Student, Teacher, Attendance, FeeInvoice, FeePayment,
     FeeCategory, Exam, ExamResult, Notice, ClassLevel, Section, Subject, SchoolProfile, AcademicSession,
-    Timetable
+    Timetable, FeeHead, FeeRefund, StudentConcession, TransportRoute, HostelFacility, FeeReceipt,
+    Role, RolePermission, UserProfile, AuditLog, Branch, BackupConfiguration, SecurityConfiguration
 )
 from .student_utils import find_duplicate_student
 
@@ -15,6 +16,13 @@ class StudentForm(forms.ModelForm):
         if school:
             self.fields['class_level'].queryset = ClassLevel.objects.filter(school=school).order_by('order', 'name')
             self.fields['section'].queryset = Section.objects.filter(class_level__school=school).select_related('class_level')
+        else:
+            self.fields['class_level'].queryset = ClassLevel.objects.none()
+            self.fields['section'].queryset = Section.objects.none()
+
+        # Enforce non-editable (read-only) admission number
+        self.fields['admission_number'].widget.attrs['readonly'] = True
+        self.fields['admission_number'].widget.attrs['style'] = 'background-color:#f1f5f9; cursor:not-allowed; font-weight:700; color:#334155;'
 
     class Meta:
         model = Student
@@ -27,7 +35,12 @@ class StudentForm(forms.ModelForm):
             'is_active'
         ]
         widgets = {
-            'admission_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. SRS-2026-1001'}),
+            'admission_number': forms.TextInput(attrs={
+                'class': 'form-input',
+                'readonly': 'readonly',
+                'style': 'background-color:#f1f5f9; cursor:not-allowed; font-weight:700; color:#334155;',
+                'placeholder': 'Auto-Generated Admission No'
+            }),
             'roll_number': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': 'e.g. 1'}),
             'first_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'First Name'}),
             'last_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Last Name'}),
@@ -189,7 +202,8 @@ class SchoolSettingsForm(forms.ModelForm):
             'name', 'short_name', 'tagline', 'affiliation_number',
             'board', 'school_code', 'address', 'phone', 'email',
             'website', 'principal_name', 'currency_symbol',
-            'logo', 'principal_signature'
+            'logo', 'principal_signature',
+            'upi_id', 'upi_payee_name', 'upi_qr_code', 'enable_qr_collection'
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Full Official School Name', 'required': 'required'}),
@@ -206,6 +220,87 @@ class SchoolSettingsForm(forms.ModelForm):
             'currency_symbol': forms.TextInput(attrs={'class': 'form-input', 'style': 'max-width:90px;'}),
             'logo': forms.FileInput(attrs={'class': 'form-input', 'accept': 'image/*', 'id': 'schoolLogoInput'}),
             'principal_signature': forms.FileInput(attrs={'class': 'form-input', 'accept': 'image/*', 'id': 'principalSigInput'}),
+            'upi_id': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. srsschool@upi / 9876543210@paytm'}),
+            'upi_payee_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Account / Institution Name for UPI'}),
+            'upi_qr_code': forms.FileInput(attrs={'class': 'form-input', 'accept': 'image/*', 'id': 'upiQrInput'}),
+            'enable_qr_collection': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+
+class FeeHeadForm(forms.ModelForm):
+    class Meta:
+        model = FeeHead
+        fields = ['name', 'code', 'fee_type', 'default_amount', 'is_recurring', 'is_optional', 'is_active', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Tuition Fee, Transport Fee, Hostel Fee', 'required': 'required'}),
+            'code': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. TUITION, TRANS, HOSTEL'}),
+            'fee_type': forms.Select(attrs={'class': 'form-select'}),
+            'default_amount': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'placeholder': '0.00'}),
+            'is_recurring': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'is_optional': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'description': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2, 'placeholder': 'Fee Head description or remarks'}),
+        }
+
+
+class FeeRefundForm(forms.ModelForm):
+    class Meta:
+        model = FeeRefund
+        fields = ['student', 'receipt', 'amount', 'refund_date', 'refund_mode', 'reference_number', 'reason']
+        widgets = {
+            'student': forms.Select(attrs={'class': 'form-select', 'id': 'refundStudentSelect'}),
+            'receipt': forms.Select(attrs={'class': 'form-select', 'id': 'refundReceiptSelect'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'placeholder': '0.00', 'required': 'required'}),
+            'refund_date': forms.DateInput(attrs={'class': 'form-input', 'type': 'date', 'required': 'required'}),
+            'refund_mode': forms.Select(attrs={'class': 'form-select'}),
+            'reference_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Bank Ref / Cheque No / UTR'}),
+            'reason': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3, 'placeholder': 'Justification for refund (Withdrawal, TC, Excess payment, etc.)', 'required': 'required'}),
+        }
+
+
+class StudentConcessionForm(forms.ModelForm):
+    class Meta:
+        model = StudentConcession
+        fields = ['student', 'academic_session', 'concession_type', 'fee_head', 'discount_type', 'discount_value', 'reason', 'is_active']
+        widgets = {
+            'student': forms.Select(attrs={'class': 'form-select', 'id': 'concessionStudentSelect'}),
+            'academic_session': forms.Select(attrs={'class': 'form-select'}),
+            'concession_type': forms.Select(attrs={'class': 'form-select'}),
+            'fee_head': forms.Select(attrs={'class': 'form-select'}),
+            'discount_type': forms.Select(attrs={'class': 'form-select'}),
+            'discount_value': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'placeholder': '10'}),
+            'reason': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2, 'placeholder': 'Eligibility justification'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+
+class TransportRouteForm(forms.ModelForm):
+    class Meta:
+        model = TransportRoute
+        fields = ['route_name', 'vehicle_number', 'driver_name', 'driver_phone', 'monthly_fare', 'pickup_points', 'is_active']
+        widgets = {
+            'route_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Route 1 - City Center to Campus', 'required': 'required'}),
+            'vehicle_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. DL 1PB 4589'}),
+            'driver_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Driver / Attendant Name'}),
+            'driver_phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Driver Contact Number'}),
+            'monthly_fare': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'placeholder': '1200.00'}),
+            'pickup_points': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2, 'placeholder': 'Comma-separated stop points'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+
+class HostelFacilityForm(forms.ModelForm):
+    class Meta:
+        model = HostelFacility
+        fields = ['hostel_name', 'room_type', 'monthly_fee', 'warden_name', 'warden_phone', 'capacity', 'is_active']
+        widgets = {
+            'hostel_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Vivekananda Boys Hostel', 'required': 'required'}),
+            'room_type': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Double AC / 3-Bed Sharing'}),
+            'monthly_fee': forms.NumberInput(attrs={'class': 'form-input', 'step': '0.01', 'placeholder': '6000.00'}),
+            'warden_name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Warden Name'}),
+            'warden_phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Warden Contact Phone'}),
+            'capacity': forms.NumberInput(attrs={'class': 'form-input', 'placeholder': '50'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
         }
 
 
@@ -255,4 +350,190 @@ class TimetableForm(forms.ModelForm):
             'end_time': forms.TimeInput(attrs={'class': 'form-input', 'type': 'time'}),
             'room_number': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Room 101'}),
         }
+
+
+class RoleForm(forms.ModelForm):
+    class Meta:
+        model = Role
+        fields = ['name', 'code', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Vice Principal, Lab Assistant', 'required': 'required'}),
+            'code': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. VICE_PRINCIPAL, LAB_ASST', 'required': 'required'}),
+            'description': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2, 'placeholder': 'Brief description of roles and responsibilities'}),
+        }
+
+
+class UserCreateUpdateForm(forms.Form):
+    username = forms.CharField(
+        max_length=150,
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. jdoe_teacher'})
+    )
+    first_name = forms.CharField(
+        max_length=150, required=False,
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'First Name'})
+    )
+    last_name = forms.CharField(
+        max_length=150, required=False,
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Last Name'})
+    )
+    email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'email@school.edu'})
+    )
+    password = forms.CharField(
+        max_length=128, required=False,
+        widget=forms.PasswordInput(attrs={'class': 'form-input', 'placeholder': 'Enter password (leave blank to keep existing)'})
+    )
+    role_obj = forms.ModelChoiceField(
+        queryset=Role.objects.all(),
+        required=True,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_role_obj'})
+    )
+    phone = forms.CharField(
+        max_length=20, required=False,
+        widget=forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Contact phone number'})
+    )
+    assigned_teacher = forms.ModelChoiceField(
+        queryset=Teacher.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_assigned_teacher'}),
+        help_text="Link this login account to an existing Teacher record."
+    )
+    assigned_classes = forms.ModelMultipleChoiceField(
+        queryset=ClassLevel.objects.all(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': 5, 'id': 'id_assigned_classes'}),
+        help_text="Hold Ctrl / Cmd to select multiple classes."
+    )
+    assigned_sections = forms.ModelMultipleChoiceField(
+        queryset=Section.objects.all(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': 5, 'id': 'id_assigned_sections'}),
+        help_text="Hold Ctrl / Cmd to select multiple sections."
+    )
+    linked_students = forms.ModelMultipleChoiceField(
+        queryset=Student.objects.filter(is_active=True),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': 6, 'id': 'id_linked_students'}),
+        help_text="Hold Ctrl / Cmd to link children for Parent role."
+    )
+    session_restriction = forms.ModelChoiceField(
+        queryset=AcademicSession.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="Optional: Lock user's view strictly to this academic session."
+    )
+    is_active = forms.BooleanField(
+        required=False, initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-checkbox'})
+    )
+
+    def __init__(self, *args, instance_user=None, school=None, is_superadmin=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance_user = instance_user
+        if not is_superadmin:
+            self.fields['role_obj'].queryset = Role.objects.exclude(code='SUPER_ADMIN')
+        if school:
+            self.fields['assigned_classes'].queryset = ClassLevel.objects.filter(school=school).order_by('order', 'name')
+            self.fields['assigned_sections'].queryset = Section.objects.filter(class_level__school=school).order_by('name')
+            self.fields['assigned_teacher'].queryset = Teacher.objects.filter(school=school, is_active=True).order_by('first_name', 'last_name')
+            self.fields['linked_students'].queryset = Student.objects.filter(school=school, is_active=True).order_by('first_name', 'last_name')
+            self.fields['session_restriction'].queryset = AcademicSession.objects.filter(school=school).order_by('-start_date')
+
+        if instance_user:
+            self.fields['username'].initial = instance_user.username
+            self.fields['first_name'].initial = instance_user.first_name
+            self.fields['last_name'].initial = instance_user.last_name
+            self.fields['email'].initial = instance_user.email
+            self.fields['is_active'].initial = instance_user.is_active
+            profile = getattr(instance_user, 'profile', None)
+            if profile:
+                self.fields['role_obj'].initial = profile.role_obj
+                self.fields['phone'].initial = profile.phone
+                self.fields['assigned_teacher'].initial = profile.assigned_teacher
+                self.fields['assigned_classes'].initial = profile.assigned_classes.all()
+                self.fields['assigned_sections'].initial = profile.assigned_sections.all()
+                self.fields['linked_students'].initial = profile.linked_students.all()
+                self.fields['session_restriction'].initial = profile.session_restriction
+
+
+class AuditApprovalForm(forms.Form):
+    remarks = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'form-textarea', 'rows': 3, 'placeholder': 'Approval or rejection justification remarks...'}),
+        required=False
+    )
+
+
+class BranchForm(forms.ModelForm):
+    class Meta:
+        model = Branch
+        fields = [
+            'name', 'code', 'branch_head', 'phone', 'email',
+            'receipt_prefix', 'student_id_prefix', 'address', 'city', 'state', 'pincode',
+            'is_main_branch', 'is_active', 'logo'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Main Campus / City Wing'}),
+            'code': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. BR-DEL-01'}),
+            'branch_head': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. Mr. Rajesh Kumar'}),
+            'phone': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. +91 9876543210'}),
+            'email': forms.EmailInput(attrs={'class': 'form-input', 'placeholder': 'e.g. branch@school.edu.in'}),
+            'receipt_prefix': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. RCP-BR1'}),
+            'student_id_prefix': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'e.g. STU-BR1'}),
+            'address': forms.Textarea(attrs={'class': 'form-textarea', 'rows': 2, 'placeholder': 'Branch street address'}),
+            'city': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'City'}),
+            'state': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'State'}),
+            'pincode': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'PIN Code'}),
+            'is_main_branch': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'logo': forms.FileInput(attrs={'class': 'form-input'}),
+        }
+
+
+class BackupConfigurationForm(forms.ModelForm):
+    class Meta:
+        model = BackupConfiguration
+        fields = [
+            'backup_frequency', 'backup_time', 'storage_location',
+            'retention_days', 'include_database', 'include_media_files',
+            'is_encryption_enabled', 'encryption_passphrase', 'auto_backup_active'
+        ]
+        widgets = {
+            'backup_frequency': forms.Select(attrs={'class': 'form-select'}),
+            'backup_time': forms.TimeInput(attrs={'class': 'form-input', 'type': 'time'}),
+            'storage_location': forms.Select(attrs={'class': 'form-select'}),
+            'retention_days': forms.NumberInput(attrs={'class': 'form-input', 'min': 1, 'max': 365}),
+            'include_database': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'include_media_files': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'is_encryption_enabled': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'encryption_passphrase': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Encryption Passphrase'}),
+            'auto_backup_active': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+
+class SecurityConfigurationForm(forms.ModelForm):
+    class Meta:
+        model = SecurityConfiguration
+        fields = [
+            'environment_mode', 'session_expiry_minutes', 'max_login_failures',
+            'lockout_duration_minutes', 'password_min_length', 'password_require_uppercase',
+            'password_require_digits', 'password_require_special', 'enable_mfa',
+            'mfa_security_pin', 'enforce_https', 'enable_suspicious_activity_alerts'
+        ]
+        widgets = {
+            'environment_mode': forms.Select(attrs={'class': 'form-select'}),
+            'session_expiry_minutes': forms.NumberInput(attrs={'class': 'form-input', 'min': 5, 'max': 1440}),
+            'max_login_failures': forms.NumberInput(attrs={'class': 'form-input', 'min': 3, 'max': 20}),
+            'lockout_duration_minutes': forms.NumberInput(attrs={'class': 'form-input', 'min': 1, 'max': 1440}),
+            'password_min_length': forms.NumberInput(attrs={'class': 'form-input', 'min': 6, 'max': 32}),
+            'password_require_uppercase': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'password_require_digits': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'password_require_special': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'enable_mfa': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'mfa_security_pin': forms.TextInput(attrs={'class': 'form-input', 'placeholder': 'Optional 2FA Security PIN'}),
+            'enforce_https': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'enable_suspicious_activity_alerts': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+        }
+
+
 

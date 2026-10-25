@@ -1,0 +1,132 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+
+{% block header_actions %}
+<a href="{% url 'branch_master' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+  <i class="fa-solid fa-arrow-left"></i> Back to Branch Master
+</a>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:850px; margin:0 auto;">
+
+  <div class="card-panel" style="padding:2rem;">
+    <form method="POST" enctype="multipart/form-data">
+      {% csrf_token %}
+
+      <div style="display:grid; grid-template-columns:2fr 1fr; gap:1.25rem; margin-bottom:1.25rem;">
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+            Branch / Campus Name *
+          </label>
+          {{ form.name }}
+          <small style="color:#64748b; font-size:0.78rem;">e.g. City Campus, North Wing, Sector 62 Branch</small>
+        </div>
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+            Branch Code *
+          </label>
+          {{ form.code }}
+          <small style="color:#64748b; font-size:0.78rem;">Unique code e.g. BR-DEL-01</small>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem;">
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+            Branch Incharge / Head Name
+          </label>
+          {{ form.branch_head }}
+        </div>
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+            Contact Phone
+          </label>
+          {{ form.phone }}
+        </div>
+      </div>
+
+      <div style="margin-bottom:1.25rem;">
+        <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+          Official Branch Email
+        </label>
+        {{ form.email }}
+      </div>
+
+      <!-- Prefix Numbering Settings -->
+      <div style="background:#f8fafc; padding:1.25rem; border-radius:12px; border:1px solid #e2e8f0; margin-bottom:1.25rem;">
+        <h4 style="margin:0 0 0.75rem 0; font-size:0.95rem; font-weight:800; color:#1e293b;">
+          <i class="fa-solid fa-barcode" style="color:#6366f1;"></i> Branch Custom Numbering Prefixes
+        </h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem;">
+          <div>
+            <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.85rem;">
+              Fee Receipt Prefix
+            </label>
+            {{ form.receipt_prefix }}
+            <small style="color:#64748b; font-size:0.78rem;">Prefix prepended to fee receipts (e.g. RCP-BR1)</small>
+          </div>
+          <div>
+            <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.85rem;">
+              Student ID / Admission Prefix
+            </label>
+            {{ form.student_id_prefix }}
+            <small style="color:#64748b; font-size:0.78rem;">Prefix prepended to student admissions (e.g. STU-BR1)</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Address -->
+      <div style="margin-bottom:1.25rem;">
+        <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+          Campus Street Address
+        </label>
+        {{ form.address }}
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.25rem; margin-bottom:1.25rem;">
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">City</label>
+          {{ form.city }}
+        </div>
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">State</label>
+          {{ form.state }}
+        </div>
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">PIN Code</label>
+          {{ form.pincode }}
+        </div>
+      </div>
+
+      <!-- Logo & Flags -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.5rem; align-items:center;">
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.4rem; font-size:0.88rem;">
+            Branch-Specific Logo (Optional)
+          </label>
+          {{ form.logo }}
+        </div>
+        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.88rem; font-weight:700; color:#1e293b; cursor:pointer;">
+            {{ form.is_main_branch }} Mark as Main / Primary Campus
+          </label>
+          <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.88rem; font-weight:700; color:#1e293b; cursor:pointer;">
+            {{ form.is_active }} Branch is Active
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <a href="{% url 'branch_master' %}" class="btn btn-secondary" style="font-weight:700;">Cancel</a>
+        <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem; font-weight:700;">
+          <i class="fa-solid fa-floppy-disk"></i> Save Branch
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

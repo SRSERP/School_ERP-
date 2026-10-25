@@ -156,26 +156,50 @@
         </li>
         <li class="nav-item {% if request.resolver_match.url_name == 'fee_counter' %}active{% endif %}">
           <a href="{% url 'fee_counter' %}">
-            <span class="nav-icon"><i class="fa-solid fa-cash-register"></i></span>
+            <span class="nav-icon"><i class="fa-solid fa-cash-register" style="color:#10b981;"></i></span>
             <span>Fee Collection Counter</span>
           </a>
         </li>
-        <li class="nav-item {% if request.resolver_match.url_name == 'class_fee_master' %}active{% endif %}">
-          <a href="{% url 'class_fee_master' %}">
-            <span class="nav-icon"><i class="fa-solid fa-sliders"></i></span>
-            <span>Class Fee Master</span>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fee_heads_master' %}active{% endif %}">
+          <a href="{% url 'fee_heads_master' %}">
+            <span class="nav-icon"><i class="fa-solid fa-tags" style="color:#f59e0b;"></i></span>
+            <span>Fee Head Master</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fee_structure' %}active{% endif %}">
+          <a href="{% url 'fee_structure' %}">
+            <span class="nav-icon"><i class="fa-solid fa-layer-group" style="color:#8b5cf6;"></i></span>
+            <span>Fee Structure & Schedules</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'student_ledger' or request.resolver_match.url_name == 'student_ledger_detail' %}active{% endif %}">
+          <a href="{% url 'student_ledger' %}">
+            <span class="nav-icon"><i class="fa-solid fa-book-bookmark" style="color:#06b6d4;"></i></span>
+            <span>Student Ledger</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fee_receipts_list' %}active{% endif %}">
+          <a href="{% url 'fee_receipts_list' %}">
+            <span class="nav-icon"><i class="fa-solid fa-receipt" style="color:#6366f1;"></i></span>
+            <span>Fee Receipts & History</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fee_refunds' %}active{% endif %}">
+          <a href="{% url 'fee_refunds' %}">
+            <span class="nav-icon"><i class="fa-solid fa-hand-holding-dollar" style="color:#ec4899;"></i></span>
+            <span>Refunds & Approvals</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'fee_reconciliation' %}active{% endif %}">
+          <a href="{% url 'fee_reconciliation' %}">
+            <span class="nav-icon"><i class="fa-solid fa-scale-balanced" style="color:#14b8a6;"></i></span>
+            <span>Reconciliation</span>
           </a>
         </li>
         <li class="nav-item {% if request.resolver_match.url_name == 'fees_defaulters' %}active{% endif %}">
           <a href="{% url 'fees_defaulters' %}">
-            <span class="nav-icon"><i class="fa-solid fa-users-slash"></i></span>
-            <span>Pending Dues / Defaulters</span>
-          </a>
-        </li>
-        <li class="nav-item {% if request.resolver_match.url_name == 'fees_list' %}active{% endif %}">
-          <a href="{% url 'fees_list' %}">
-            <span class="nav-icon"><i class="fa-solid fa-receipt"></i></span>
-            <span>Fee Invoices & Ledger</span>
+            <span class="nav-icon"><i class="fa-solid fa-users-slash" style="color:#ef4444;"></i></span>
+            <span>Defaulters & Reminders</span>
           </a>
         </li>
         {% endif %}
@@ -224,24 +248,64 @@
         <li class="nav-header">Session Management</li>
         <li class="nav-item {% if request.resolver_match.url_name == 'academic_sessions_manage' %}active{% endif %}">
           <a href="{% url 'academic_sessions_manage' %}">
-            <span class="nav-icon"><i class="fa-solid fa-calendar-plus"></i></span>
+            <span class="nav-icon"><i class="fa-solid fa-calendar-plus" style="color:#6366f1;"></i></span>
             <span>Academic Sessions</span>
           </a>
         </li>
-        <li class="nav-item {% if request.resolver_match.url_name == 'student_bulk_promote' %}active{% endif %}">
-          <a href="{% url 'student_bulk_promote' %}">
-            <span class="nav-icon"><i class="fa-solid fa-arrow-right-arrow-left"></i></span>
-            <span>Student Promotion</span>
+        <li class="nav-item {% if request.resolver_match.url_name == 'promotion_wizard' or request.resolver_match.url_name == 'student_bulk_promote' %}active{% endif %}">
+          <a href="{% url 'promotion_wizard' %}">
+            <span class="nav-icon"><i class="fa-solid fa-graduation-cap" style="color:#10b981;"></i></span>
+            <span>Promotion Wizard</span>
           </a>
         </li>
         {% endif %}
 
-        {% if user_perms.can_manage_users %}
-        <li class="nav-header">Staff & Permissions</li>
+        {% if user_perms.can_manage_classes or request.user.is_superuser %}
+        <li class="nav-header">Multi-Branch Setup</li>
+        <li class="nav-item {% if 'branch' in request.resolver_match.url_name %}active{% endif %}">
+          <a href="{% url 'branch_master' %}">
+            <span class="nav-icon"><i class="fa-solid fa-code-branch" style="color:#38bdf8;"></i></span>
+            <span>Branch Master</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'consolidated_report' %}active{% endif %}">
+          <a href="{% url 'consolidated_report' %}">
+            <span class="nav-icon"><i class="fa-solid fa-chart-pie" style="color:#f59e0b;"></i></span>
+            <span>Consolidated Reports</span>
+          </a>
+        </li>
+        {% endif %}
+
+        {% if user_perms.can_manage_users or request.user.is_superuser %}
+        <li class="nav-header">Security & Permissions</li>
         <li class="nav-item {% if 'user' in request.resolver_match.url_name and request.resolver_match.url_name != 'user_login' %}active{% endif %}">
           <a href="{% url 'user_list' %}">
-            <span class="nav-icon"><i class="fa-solid fa-users-gear"></i></span>
-            <span>User Registration & Permissions</span>
+            <span class="nav-icon"><i class="fa-solid fa-users-gear" style="color:#60a5fa;"></i></span>
+            <span>User Management</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'roles_master' %}active{% endif %}">
+          <a href="{% url 'roles_master' %}">
+            <span class="nav-icon"><i class="fa-solid fa-id-card-clip" style="color:#a855f7;"></i></span>
+            <span>Role Master</span>
+          </a>
+        </li>
+        <li class="nav-item {% if 'matrix' in request.resolver_match.url_name %}active{% endif %}">
+          <a href="{% url 'permission_matrix' %}">
+            <span class="nav-icon"><i class="fa-solid fa-table-cells" style="color:#38bdf8;"></i></span>
+            <span>Permission Matrix</span>
+          </a>
+        </li>
+        <li class="nav-item {% if 'audit' in request.resolver_match.url_name %}active{% endif %}">
+          <a href="{% url 'audit_logs' %}">
+            <span class="nav-icon"><i class="fa-solid fa-shield-halved" style="color:#ef4444;"></i></span>
+            <span>Audit Logs & Approvals</span>
+          </a>
+        </li>
+        <li class="nav-item {% if request.resolver_match.url_name == 'security_settings' %}active{% endif %}">
+          <a href="{% url 'security_settings' %}">
+            <span class="nav-icon"><i class="fa-solid fa-lock" style="color:#10b981;"></i></span>
+            <span>Security & Compliance</span>
           </a>
         </li>
         {% endif %}

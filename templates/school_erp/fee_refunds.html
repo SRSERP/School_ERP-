@@ -1,0 +1,314 @@
+{% extends 'school_erp/base.html' %}
+{% load static %}
+
+{% block title %}Fee Refunds & Approvals - SRS School ERP{% endblock %}
+{% block page_title %}Fee Refunds & Approvals{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+  <button type="button" onclick="openNewRefundModal()" class="btn btn-primary btn-sm" style="background:#ec4899; border-color:#ec4899; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(236,72,153,0.25);">
+    <i class="fa-solid fa-plus-circle"></i> Request Fee Refund
+  </button>
+  <a href="{% url 'fee_receipts_list' %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+    <i class="fa-solid fa-receipt"></i> Receipts
+  </a>
+  <a href="{% url 'student_ledger' %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+    <i class="fa-solid fa-book-bookmark"></i> Student Ledger
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1300px; margin:0 auto;">
+
+  <!-- Hero Header Banner -->
+  <div style="background:linear-gradient(135deg, #831843 0%, #be185d 100%); color:#fff; border-radius:14px; padding:1.4rem 1.8rem; margin-bottom:1.5rem; box-shadow:0 6px 20px rgba(131,24,67,0.15); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+    <div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span style="background:#fbcfe8; color:#831843; font-size:10px; font-weight:900; padding:2px 8px; border-radius:12px; text-transform:uppercase;">Audit Controlled</span>
+        <h3 style="color:#fff; font-size:1.3rem; margin:0; font-weight:800;">
+          <i class="fa-solid fa-hand-holding-dollar" style="color:#fbcfe8;"></i> Fee Refund Management & Approval Workflow
+        </h3>
+      </div>
+      <p style="color:#fce7f3; font-size:0.875rem; margin:0; max-width:750px;">
+        Structured multi-level refund processing for School TC / Withdrawals, Caution Deposit settlements, and excess fee adjustments with strict admin approvals and complete ledger audit logging.
+      </p>
+    </div>
+    <div style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); border-radius:10px; padding:8px 16px; text-align:center;">
+      <span style="font-size:0.75rem; color:#fce7f3; text-transform:uppercase; font-weight:700; display:block;">Total Disbursed</span>
+      <span style="font-size:1.25rem; font-weight:900; color:#fff;">₹{{ stats.total_disbursed|floatformat:2 }}</span>
+    </div>
+  </div>
+
+  <!-- Metric Badges Row -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:1.5rem;">
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #f59e0b;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Pending Approval</div>
+      <div style="font-size:24px; font-weight:900; color:#f59e0b;">{{ stats.pending }}</div>
+      <div style="font-size:11px; color:#f59e0b; font-weight:600; margin-top:2px;">Awaiting Admin Review</div>
+    </div>
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #2563eb;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Approved (To Disburse)</div>
+      <div style="font-size:24px; font-weight:900; color:#2563eb;">{{ stats.approved }}</div>
+      <div style="font-size:11px; color:#2563eb; font-weight:600; margin-top:2px;">Ready for Accounts Payout</div>
+    </div>
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #059669;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Processed / Disbursed</div>
+      <div style="font-size:24px; font-weight:900; color:#059669;">{{ stats.processed }}</div>
+      <div style="font-size:11px; color:#059669; font-weight:600; margin-top:2px;">Completed with Voucher</div>
+    </div>
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #64748b;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Total Requests</div>
+      <div style="font-size:24px; font-weight:900; color:#0f172a;">{{ stats.total }}</div>
+      <div style="font-size:11px; color:#64748b; font-weight:600; margin-top:2px;">All-time logged</div>
+    </div>
+  </div>
+
+  <!-- Status Filter Toolbar -->
+  <div class="card" style="background:#ffffff; border-radius:12px; padding:14px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); margin-bottom:1.5rem;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:800; color:#475569; text-transform:uppercase;">Filter:</span>
+        <a href="{% url 'fee_refunds' %}" class="btn btn-sm {% if not status_filter %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">All ({{ stats.total }})</a>
+        <a href="{% url 'fee_refunds' %}?status=Pending" class="btn btn-sm {% if status_filter == 'Pending' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Pending ({{ stats.pending }})</a>
+        <a href="{% url 'fee_refunds' %}?status=Approved" class="btn btn-sm {% if status_filter == 'Approved' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Approved ({{ stats.approved }})</a>
+        <a href="{% url 'fee_refunds' %}?status=Processed" class="btn btn-sm {% if status_filter == 'Processed' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Processed ({{ stats.processed }})</a>
+        <a href="{% url 'fee_refunds' %}?status=Rejected" class="btn btn-sm {% if status_filter == 'Rejected' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Rejected</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Refunds Table -->
+  <div class="card" style="background:#ffffff; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,0.04); overflow:hidden;">
+    <div style="padding:14px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+      <h4 style="margin:0; font-size:14px; font-weight:800; color:#0f172a;">
+        <i class="fa-solid fa-list-check" style="color:#ec4899;"></i> Refund Vouchers & Approval Register
+      </h4>
+      <span style="font-size:11.5px; color:#64748b; font-weight:600;">
+        Recorded under Double-Entry Ledger
+      </span>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table class="custom-table" style="margin:0; font-size:12px; width:100%;">
+        <thead>
+          <tr style="background:#f1f5f9; color:#475569;">
+            <th>Refund No</th>
+            <th>Date</th>
+            <th>Student Details</th>
+            <th>Mode & Ref</th>
+            <th style="text-align:right;">Refund Amount</th>
+            <th>Reason</th>
+            <th style="text-align:center;">Status</th>
+            <th>Audit Trail (Approver)</th>
+            <th style="text-align:center; min-width:130px;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rf in refunds %}
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td>
+              <code style="font-weight:900; color:#0f172a; font-size:12px;">{{ rf.refund_number }}</code>
+              {% if rf.receipt %}
+              <div style="font-size:10.5px; color:#64748b;">Against: #{{ rf.receipt.receipt_number }}</div>
+              {% endif %}
+            </td>
+            <td style="color:#475569; font-weight:600;">{{ rf.refund_date|date:"d M Y" }}</td>
+            <td>
+              <div style="font-weight:800; color:#0f172a;">{{ rf.student.full_name }}</div>
+              <div style="font-size:10.5px; color:#64748b;">
+                {{ rf.student.class_level.name }}-{{ rf.student.section.name }} | Adm: {{ rf.student.admission_number }}
+              </div>
+            </td>
+            <td>
+              <span class="badge" style="background:#f1f5f9; color:#334155; font-weight:700;">{{ rf.refund_mode }}</span>
+              {% if rf.reference_number %}
+              <div style="font-size:10.5px; color:#64748b;">Ref: {{ rf.reference_number }}</div>
+              {% endif %}
+            </td>
+            <td style="text-align:right; font-weight:900; color:#dc2626; font-size:13px;">
+              ₹{{ rf.amount|floatformat:2 }}
+            </td>
+            <td>
+              <div style="color:#1e293b; font-weight:600;">{{ rf.reason }}</div>
+              {% if rf.remarks %}
+              <div style="font-size:10.5px; color:#64748b;">Note: {{ rf.remarks }}</div>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if rf.status == 'Pending' %}
+              <span class="badge" style="background:#fef3c7; color:#b45309; font-weight:800; border:1px solid #fde68a;">
+                <i class="fa-solid fa-hourglass-half"></i> Pending
+              </span>
+              {% elif rf.status == 'Approved' %}
+              <span class="badge" style="background:#dbeafe; color:#1d4ed8; font-weight:800; border:1px solid #bfdbfe;">
+                <i class="fa-solid fa-thumbs-up"></i> Approved
+              </span>
+              {% elif rf.status == 'Processed' %}
+              <span class="badge" style="background:#ecfdf5; color:#047857; font-weight:800; border:1px solid #a7f3d0;">
+                <i class="fa-solid fa-check-circle"></i> Disbursed
+              </span>
+              {% else %}
+              <span class="badge" style="background:#fee2e2; color:#b91c1c; font-weight:800; border:1px solid #fecaca;">
+                <i class="fa-solid fa-xmark"></i> Rejected
+              </span>
+              {% endif %}
+            </td>
+            <td style="font-size:11px; color:#475569;">
+              {% if rf.approved_by %}
+              <div>Approved by: <strong>{{ rf.approved_by.username }}</strong></div>
+              <small style="color:#64748b;">{{ rf.approved_at|date:"d M, H:i" }}</small>
+              {% else %}
+              <span style="color:#94a3b8;">Req by: {{ rf.requested_by.username|default:"Staff" }}</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if rf.status == 'Pending' %}
+              <div style="display:inline-flex; gap:6px;">
+                <a href="{% url 'fee_refund_action' rf.id 'approve' %}" class="btn btn-sm btn-primary" style="background:#059669; border-color:#059669; font-size:11px; padding:3px 8px; font-weight:700;" onclick="return confirm('Approve refund of ₹{{ rf.amount }} for {{ rf.student.full_name }}?');">
+                  <i class="fa-solid fa-check"></i> Approve
+                </a>
+                <a href="{% url 'fee_refund_action' rf.id 'reject' %}" class="btn btn-sm btn-secondary" style="color:#ef4444; font-size:11px; padding:3px 8px; font-weight:700;" onclick="return confirm('Reject this refund request?');">
+                  <i class="fa-solid fa-xmark"></i>
+                </a>
+              </div>
+              {% elif rf.status == 'Approved' %}
+              <button type="button" onclick="openDisburseModal('{{ rf.id }}', '{{ rf.refund_number }}', '{{ rf.amount }}', '{{ rf.student.full_name|escapejs }}')" class="btn btn-sm btn-primary" style="background:#2563eb; font-size:11px; padding:3px 8px; font-weight:800;">
+                <i class="fa-solid fa-money-bill-transfer"></i> Disburse
+              </button>
+              {% else %}
+              <span style="color:#94a3b8; font-size:11px; font-weight:700;">Completed</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">
+              <i class="fa-solid fa-hand-holding-dollar" style="font-size:36px; margin-bottom:10px; color:#cbd5e1;"></i>
+              <p style="margin:0; font-size:14px; font-weight:700;">No refund requests recorded.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Create New Refund Request -->
+<div id="newRefundModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(3px);">
+  <div style="background:#ffffff; border-radius:14px; width:92%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden;">
+    <div style="background:#831843; color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-plus-circle" style="color:#fbcfe8;"></i> Request Student Fee Refund
+      </h3>
+      <button type="button" onclick="closeNewRefundModal()" style="background:transparent; border:none; color:#fbcfe8; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form method="POST" action="" style="padding:20px;">
+      {% csrf_token %}
+      <input type="hidden" name="create_refund" value="1">
+
+      <div style="margin-bottom:12px;">
+        <label class="form-label" style="font-weight:700; font-size:12px;">Select Student *</label>
+        <select name="student" class="form-select select2-enable" required style="width:100%;">
+          <option value="">-- Choose Student --</option>
+          {% for s in students %}
+          <option value="{{ s.id }}">{{ s.full_name }} ({{ s.admission_number }}) - {{ s.class_level.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div>
+          <label class="form-label" style="font-weight:700; font-size:12px;">Refund Amount (₹) *</label>
+          <input type="number" step="0.01" name="amount" placeholder="0.00" class="form-input" required>
+        </div>
+        <div>
+          <label class="form-label" style="font-weight:700; font-size:12px;">Payout Mode</label>
+          <select name="refund_mode" class="form-select">
+            <option value="Bank Transfer">Bank Transfer / NEFT</option>
+            <option value="Cheque / DD">Cheque / DD</option>
+            <option value="Cash">Cash at Counter</option>
+            <option value="UPI">UPI Refund</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label class="form-label" style="font-weight:700; font-size:12px;">Bank Txn Reference / Cheque No.</label>
+        <input type="text" name="reference_number" placeholder="e.g. UTR / NEFT Reference / Cheque No" class="form-input">
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label class="form-label" style="font-weight:700; font-size:12px;">Reason for Refund *</label>
+        <textarea name="reason" rows="3" class="form-textarea" placeholder="e.g. TC issued / Student relocation, excess fee deposit, caution deposit refunded" required></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeNewRefundModal()" class="btn btn-secondary" style="font-weight:700;">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#ec4899; border-color:#ec4899; font-weight:800;">
+          <i class="fa-solid fa-paper-plane"></i> Submit for Approval
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Disburse Approved Refund -->
+<div id="disburseModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(3px);">
+  <div style="background:#ffffff; border-radius:14px; width:92%; max-width:480px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden;">
+    <div style="background:#2563eb; color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:15px; font-weight:800;">
+        <i class="fa-solid fa-money-bill-transfer"></i> Disburse Approved Refund
+      </h3>
+      <button type="button" onclick="closeDisburseModal()" style="background:transparent; border:none; color:#fff; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form id="disburseForm" method="POST" action="" style="padding:20px;">
+      {% csrf_token %}
+      <div style="margin-bottom:14px; font-size:13px; color:#1e293b;">
+        Refund Voucher: <strong id="disburseRefNo"></strong><br>
+        Student: <strong id="disburseStudent"></strong><br>
+        Amount: <strong id="disburseAmount" style="color:#059669; font-size:15px;"></strong>
+      </div>
+      <div style="margin-bottom:16px;">
+        <label class="form-label" style="font-weight:700; font-size:12px;">Final Bank UTR / Cheque Reference *</label>
+        <input type="text" name="reference_number" class="form-input" placeholder="e.g. UTR-SBI-892189 / Cheque 489210" required>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" onclick="closeDisburseModal()" class="btn btn-secondary" style="font-weight:700;">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:800;">
+          <i class="fa-solid fa-check"></i> Complete Payout
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openNewRefundModal() {
+  document.getElementById('newRefundModal').style.display = 'flex';
+}
+function closeNewRefundModal() {
+  document.getElementById('newRefundModal').style.display = 'none';
+}
+function openDisburseModal(id, refNo, amount, student) {
+  document.getElementById('disburseForm').action = "/fees/refund/" + id + "/process/";
+  document.getElementById('disburseRefNo').innerText = refNo;
+  document.getElementById('disburseStudent').innerText = student;
+  document.getElementById('disburseAmount').innerText = "₹" + amount;
+  document.getElementById('disburseModal').style.display = 'flex';
+}
+function closeDisburseModal() {
+  document.getElementById('disburseModal').style.display = 'none';
+}
+window.onclick = function(e) {
+  if (e.target == document.getElementById('newRefundModal')) closeNewRefundModal();
+  if (e.target == document.getElementById('disburseModal')) closeDisburseModal();
+}
+</script>
+{% endblock %}

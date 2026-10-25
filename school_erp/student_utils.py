@@ -177,9 +177,60 @@ def get_row_field(row: dict, aliases: list, default: str = '') -> str:
 
         # Check with underscore replaced by space
         alias_sp = alias.replace('_', ' ')
-        if alias_sp in row and row[alias_sp] is not None:
-            val = str(row[alias_sp]).strip()
-            if val:
-                return val
-
     return default
+
+
+def generate_student_admission_number(school=None, session=None) -> str:
+    """
+    Auto-generates student admission number in the format:
+    [School First 3 Letters]-[Academic Year]-[Register Sequence]
+    e.g.:
+      Braj Public School Inter College -> BRA-2026-1001
+      SRS International Public School  -> SRS-2026-1030
+      Delhi Public School              -> DEL-2026-1001
+    """
+    from django.utils import timezone
+    from .models import SchoolProfile, Student
+
+    if not school:
+        school = SchoolProfile.objects.first()
+
+    school_name = school.name if school else "SCH"
+    clean_name = re.sub(r'[^A-Za-z0-9]', '', school_name)
+    prefix = clean_name[:3].upper() if len(clean_name) >= 3 else (clean_name.upper() + 'SCH')[:3]
+
+    # Year: extract 4-digit year from session or fallback to current year
+    year_str = str(timezone.now().year)
+    if session and getattr(session, 'name', None):
+        m = re.search(r'\d{4}', session.name)
+        if m:
+            year_str = m.group(0)
+
+    # Sequence: based on count of existing students for this school
+    school_count = Student.objects.filter(school=school).count() + 1
+    seq = school_count
+
+    while True:
+        candidate = f"{prefix}-{year_str}-{1000 + seq}"
+        if not Student.objects.filter(admission_number=candidate).exists():
+            return candidate
+        seq += 1
+
+
+def generate_unique_school_code(name: str = "") -> str:
+    """
+    Auto-generates a unique school code based on the first 3 letters of the school name:
+    e.g. Braj Public School -> BRA-01
+         Delhi Public School -> DEL-01
+    """
+    from .models import SchoolProfile
+
+    clean = re.sub(r'[^A-Za-z0-9]', '', name or 'SCH')
+    prefix = clean[:3].upper() if len(clean) >= 3 else (clean.upper() + 'SCH')[:3]
+    num = 1
+    while True:
+        code = f"{prefix}-{num:02d}"
+        if not SchoolProfile.objects.filter(school_code__iexact=code).exists():
+            return code
+        num += 1
+

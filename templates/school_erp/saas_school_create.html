@@ -69,9 +69,14 @@
 
       <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; margin-bottom:16px;">
         <div>
-          <label class="form-label">School Code (Unique) *</label>
-          <input type="text" name="school_code" id="schoolCodeInput" class="form-input" placeholder="e.g. HERITAGE-01" style="text-transform:uppercase; font-weight:700;" required>
-          <span style="font-size:11px; color:#64748b;">Used as unique tenant identifier</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+            <label class="form-label" style="margin:0;">School Code (Unique) *</label>
+            <span style="font-size:11px; color:#2563eb; background:#eff6ff; padding:2px 8px; border-radius:10px; font-weight:700;">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Generated
+            </span>
+          </div>
+          <input type="text" name="school_code" id="schoolCodeInput" class="form-input" placeholder="e.g. BRA-01" style="text-transform:uppercase; font-weight:700;" required>
+          <span style="font-size:11px; color:#64748b;">Auto-generated from first 3 letters of school name (e.g. BRA-01).</span>
         </div>
         <div>
           <label class="form-label">Education Board</label>
@@ -267,17 +272,43 @@
 </div>
 
 <script>
-  // Auto-suggest admin username from school code
+  // Auto-generate school code and admin username from school name
+  const nameInput = document.querySelector('input[name="name"]');
   const codeInput = document.getElementById('schoolCodeInput');
   const userInput = document.getElementById('adminUsernameInput');
 
-  codeInput.addEventListener('input', function() {
+  function updateAutoSchoolCode() {
+    if (!codeInput.dataset.manuallyEdited) {
+      const clean = (nameInput.value || '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+      if (clean.length >= 3) {
+        codeInput.value = clean.substring(0, 3) + '-01';
+      } else if (clean.length > 0) {
+        codeInput.value = clean + '-01';
+      } else {
+        codeInput.value = '';
+      }
+      syncAdminUsername();
+    }
+  }
+
+  function syncAdminUsername() {
     if (!userInput.value || userInput.value.startsWith('admin_')) {
-      const clean = codeInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      const clean = (codeInput.value || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
       if (clean) {
         userInput.value = 'admin_' + clean;
       }
     }
+  }
+
+  if (nameInput) {
+    nameInput.addEventListener('input', updateAutoSchoolCode);
+  }
+
+  codeInput.addEventListener('input', function() {
+    if (document.activeElement === codeInput) {
+      codeInput.dataset.manuallyEdited = 'true';
+    }
+    syncAdminUsername();
   });
 
   // Password Generator

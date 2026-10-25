@@ -63,8 +63,18 @@ button.login-btn{width:100%;height:54px;border:0;border-radius:13px;background:l
 <form method="POST" action="{% url 'user_login' %}">
 {% csrf_token %}
 <input type="hidden" name="next" value="{{ next|default:'' }}">
-<div class="group"><label>Email / Username</label><div class="input"><span class="icon">✉</span><input id="username" name="username" type="text" placeholder="Enter your username" required autofocus></div></div>
+<div class="group"><label>Email / Username</label><div class="input"><span class="icon">✉</span><input id="username" name="username" type="text" value="{{ username_val|default:'' }}" placeholder="Enter your username" required autofocus></div></div>
 <div class="group"><label>Password</label><div class="input"><span class="icon">🔒</span><input id="password" name="password" type="password" placeholder="Enter your password" required><button class="eye" type="button" onclick="toggle()">👁</button></div></div>
+{% if require_mfa %}
+<div class="group" style="background:#f0fdf4;padding:12px;border-radius:12px;border:1px solid #bbf7d0;">
+  <label style="color:#166534;">🛡 2-Factor Authentication (Security PIN)</label>
+  <div class="input">
+    <span class="icon">🔑</span>
+    <input id="mfa_pin" name="mfa_pin" type="password" placeholder="Enter 6-digit Security PIN" required autofocus>
+  </div>
+  <small style="color:#15803d;font-size:11px;margin-top:4px;display:block;">Multi-Factor Authentication is enforced for this school.</small>
+</div>
+{% endif %}
 <div class="options"><label class="remember"><input type="checkbox" name="remember"> Remember me</label><a class="forgot" href="javascript:void(0)" onclick="alert('Please contact Administrator to reset your password.')">Forgot Password?</a></div>
 <button class="login-btn" type="submit">Sign In to Dashboard →</button>
 </form>

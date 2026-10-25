@@ -390,6 +390,37 @@
       border: 1px solid #bfdbfe;
     }
 
+    .card-panel {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .custom-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+    .custom-table th, .custom-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+    }
+    .custom-table th {
+      background: #f8fafc;
+      font-weight: 700;
+      color: #475569;
+    }
+    .table-responsive {
+      overflow-x: auto;
+      width: 100%;
+    }
+    .form-checkbox {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
     @media (max-width: 900px) {
       body {
         flex-direction: column;
@@ -468,6 +499,27 @@
       </li>
 
       <li class="saas-nav-header">System & Infrastructure</li>
+
+      <li class="saas-nav-item">
+        <a href="{% url 'backup_history' %}" class="saas-nav-link {% if request.resolver_match.url_name == 'backup_history' %}active{% endif %}">
+          <i class="fa-solid fa-box-archive" style="color:#f59e0b;"></i>
+          <span>Backup History &amp; Archives</span>
+        </a>
+      </li>
+
+      <li class="saas-nav-item">
+        <a href="{% url 'backup_config' %}" class="saas-nav-link {% if request.resolver_match.url_name == 'backup_config' %}active{% endif %}">
+          <i class="fa-solid fa-gears" style="color:#94a3b8;"></i>
+          <span>Backup Settings</span>
+        </a>
+      </li>
+
+      <li class="saas-nav-item">
+        <a href="{% url 'backup_restore' %}" class="saas-nav-link {% if request.resolver_match.url_name == 'backup_restore' %}active{% endif %}">
+          <i class="fa-solid fa-rotate-left" style="color:#06b6d4;"></i>
+          <span>Restore Console</span>
+        </a>
+      </li>
 
       <li class="saas-nav-item">
         <a href="/admin/" target="_blank" class="saas-nav-link">

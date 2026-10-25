@@ -1,0 +1,223 @@
+{% extends 'school_erp/base.html' %}
+
+{% block title %}Permission Matrix - {{ selected_role.name }}{% endblock %}
+{% block page_title %}Granular Permission Matrix{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+  <a href="{% url 'roles_master' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-arrow-left"></i> Role Master
+  </a>
+  <a href="{% url 'audit_logs' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-shield-halved" style="color:#ef4444;"></i> Audit Trail
+  </a>
+  <a href="{% url 'user_list' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-users"></i> Users
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1300px; margin:0 auto;">
+
+  <!-- Role Selector Pills & Header -->
+  <div class="card-panel" style="margin-bottom:1.5rem; padding:1.25rem 1.5rem; background:#ffffff;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:1rem;">
+      <div>
+        <h3 style="margin:0 0 4px 0; font-size:1.15rem; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-table-cells" style="color:#2563eb;"></i> Granular Access Control Matrix
+        </h3>
+        <p style="margin:0; font-size:0.83rem; color:#64748b;">
+          Configure module-level authority (View, Add, Edit, Delete, Approve, Export) for role: <strong style="color:#1e293b;">{{ selected_role.name }}</strong> (<code>{{ selected_role.code }}</code>).
+        </p>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:0.8rem; font-weight:700; color:#475569;">Select Role:</span>
+        <select onchange="window.location.href=this.value;" class="form-select" style="font-weight:700; padding:6px 12px; width:auto; min-width:200px;">
+          {% for r in roles %}
+          <option value="{% url 'role_permission_matrix' r.id %}" {% if r.id == selected_role.id %}selected{% endif %}>
+            {{ r.name }} ({{ r.code }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Role Nav Pills -->
+    <div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px;">
+      {% for r in roles %}
+      <a href="{% url 'role_permission_matrix' r.id %}" style="display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:8px; font-size:12.5px; font-weight:700; text-decoration:none; white-space:nowrap; transition:all 0.2s; border:1px solid {% if r.id == selected_role.id %}#2563eb; background:#eff6ff; color:#1d4ed8{% else %}#e2e8f0; background:#f8fafc; color:#475569{% endif %};">
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:{% if r.code == 'SUPER_ADMIN' or r.code == 'SCHOOL_ADMIN' %}#ef4444{% elif r.code == 'PRINCIPAL' %}#8b5cf6{% elif r.code == 'TEACHER' %}#10b981{% elif r.code == 'ACCOUNTANT' %}#f59e0b{% elif r.code == 'PARENT' %}#06b6d4{% elif r.code == 'STUDENT' %}#3b82f6{% else %}#64748b{% endif %};"></span>
+        {{ r.name }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if selected_role.code == 'SUPER_ADMIN' or selected_role.code == 'SCHOOL_ADMIN' %}
+  <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:12px 16px; margin-bottom:1.5rem; display:flex; align-items:center; gap:12px; color:#991b1b; font-size:13px;">
+    <i class="fa-solid fa-triangle-exclamation" style="font-size:18px; color:#ef4444;"></i>
+    <div>
+      <strong>Notice:</strong> As a <strong>{{ selected_role.name }}</strong>, users assigned to this role bypass granular restrictions and retain full master administrative privileges across all ERP functions.
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Matrix Form -->
+  <form method="POST">
+    {% csrf_token %}
+
+    <div class="card-panel" style="padding:0; overflow:hidden;">
+      <div style="background:#0f172a; color:#fff; padding:1rem 1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <h4 style="margin:0; font-size:0.98rem; font-weight:800; color:#fff;">
+            Module & Action Authority Matrix
+          </h4>
+          <span class="badge" style="background:rgba(255,255,255,0.15); color:#fff; font-weight:700;">
+            10 Modules &times; 6 Actions
+          </span>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+          <button type="button" onclick="toggleAllMatrix(true);" class="btn btn-sm" style="background:rgba(255,255,255,0.12); color:#fff; font-size:11.5px; font-weight:700; border:1px solid rgba(255,255,255,0.25);">
+            <i class="fa-solid fa-check-double"></i> Check All
+          </button>
+          <button type="button" onclick="toggleAllMatrix(false);" class="btn btn-sm" style="background:rgba(255,255,255,0.12); color:#fff; font-size:11.5px; font-weight:700; border:1px solid rgba(255,255,255,0.25);">
+            <i class="fa-solid fa-xmark"></i> Uncheck All
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="custom-table" style="font-size:13px; margin:0;">
+          <thead>
+            <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+              <th style="min-width:240px; padding:12px 16px;">ERP Module</th>
+              <th style="text-align:center; min-width:90px;">
+                <div>View</div>
+                <button type="button" onclick="toggleColumn('can_view');" style="border:none; background:none; color:#2563eb; font-size:10px; cursor:pointer; font-weight:700;">Toggle</button>
+              </th>
+              <th style="text-align:center; min-width:90px;">
+                <div>Add / Create</div>
+                <button type="button" onclick="toggleColumn('can_add');" style="border:none; background:none; color:#2563eb; font-size:10px; cursor:pointer; font-weight:700;">Toggle</button>
+              </th>
+              <th style="text-align:center; min-width:90px;">
+                <div>Edit / Modify</div>
+                <button type="button" onclick="toggleColumn('can_edit');" style="border:none; background:none; color:#2563eb; font-size:10px; cursor:pointer; font-weight:700;">Toggle</button>
+              </th>
+              <th style="text-align:center; min-width:90px;">
+                <div>Delete</div>
+                <button type="button" onclick="toggleColumn('can_delete');" style="border:none; background:none; color:#2563eb; font-size:10px; cursor:pointer; font-weight:700;">Toggle</button>
+              </th>
+              <th style="text-align:center; min-width:90px;">
+                <div>Approve</div>
+                <button type="button" onclick="toggleColumn('can_approve');" style="border:none; background:none; color:#2563eb; font-size:10px; cursor:pointer; font-weight:700;">Toggle</button>
+              </th>
+              <th style="text-align:center; min-width:90px;">
+                <div>Export</div>
+                <button type="button" onclick="toggleColumn('can_export');" style="border:none; background:none; color:#2563eb; font-size:10px; cursor:pointer; font-weight:700;">Toggle</button>
+              </th>
+              <th style="text-align:center; min-width:110px;">Quick Row</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in permissions %}
+            <tr style="border-bottom:1px solid #e2e8f0;">
+              <td style="padding:12px 16px;">
+                <div style="font-weight:700; color:#0f172a; font-size:13.5px;">
+                  {{ p.module_name }}
+                </div>
+                <div style="font-size:11px; color:#64748b;">
+                  <code>{{ p.module_code }}</code>
+                </div>
+              </td>
+
+              <!-- View -->
+              <td style="text-align:center;">
+                <input type="checkbox" name="can_view_{{ p.module_code }}" class="form-checkbox col-can_view row-{{ p.module_code }}" {% if p.can_view %}checked{% endif %} style="width:18px; height:18px; cursor:pointer; accent-color:#2563eb;">
+              </td>
+
+              <!-- Add -->
+              <td style="text-align:center;">
+                <input type="checkbox" name="can_add_{{ p.module_code }}" class="form-checkbox col-can_add row-{{ p.module_code }}" {% if p.can_add %}checked{% endif %} style="width:18px; height:18px; cursor:pointer; accent-color:#10b981;">
+              </td>
+
+              <!-- Edit -->
+              <td style="text-align:center;">
+                <input type="checkbox" name="can_edit_{{ p.module_code }}" class="form-checkbox col-can_edit row-{{ p.module_code }}" {% if p.can_edit %}checked{% endif %} style="width:18px; height:18px; cursor:pointer; accent-color:#f59e0b;">
+              </td>
+
+              <!-- Delete -->
+              <td style="text-align:center;">
+                <input type="checkbox" name="can_delete_{{ p.module_code }}" class="form-checkbox col-can_delete row-{{ p.module_code }}" {% if p.can_delete %}checked{% endif %} style="width:18px; height:18px; cursor:pointer; accent-color:#ef4444;">
+              </td>
+
+              <!-- Approve -->
+              <td style="text-align:center;">
+                <input type="checkbox" name="can_approve_{{ p.module_code }}" class="form-checkbox col-can_approve row-{{ p.module_code }}" {% if p.can_approve %}checked{% endif %} style="width:18px; height:18px; cursor:pointer; accent-color:#8b5cf6;">
+              </td>
+
+              <!-- Export -->
+              <td style="text-align:center;">
+                <input type="checkbox" name="can_export_{{ p.module_code }}" class="form-checkbox col-can_export row-{{ p.module_code }}" {% if p.can_export %}checked{% endif %} style="width:18px; height:18px; cursor:pointer; accent-color:#06b6d4;">
+              </td>
+
+              <!-- Quick Row Toggle -->
+              <td style="text-align:center;">
+                <button type="button" onclick="toggleRow('{{ p.module_code }}');" class="btn btn-sm btn-secondary" style="font-size:11px; padding:3px 8px;">
+                  Toggle
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Footer Action & Reason Bar -->
+      <div style="background:#f8fafc; border-top:1px solid #e2e8f0; padding:1.25rem 1.5rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;">
+        <div style="flex:1; min-width:280px; max-width:600px;">
+          <label style="display:block; font-size:12px; font-weight:700; color:#334155; margin-bottom:4px;">
+            Audit Reason / Authorization Note *
+          </label>
+          <input type="text" name="reason" class="form-input" placeholder="e.g. Approved update to Teacher grading permissions per academic council" required value="Updated granular permission matrix for {{ selected_role.name }}">
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <a href="{% url 'roles_master' %}" class="btn btn-secondary" style="font-weight:700;">
+            Cancel
+          </a>
+          <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:700; padding:9px 24px;">
+            <i class="fa-solid fa-floppy-disk"></i> Save Permissions Matrix
+          </button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+</div>
+
+<script>
+function toggleAllMatrix(checkVal) {
+  document.querySelectorAll('.form-checkbox').forEach(cb => {
+    cb.checked = checkVal;
+  });
+}
+
+function toggleColumn(colClass) {
+  const checkboxes = document.querySelectorAll('.' + colClass);
+  const anyUnchecked = Array.from(checkboxes).some(cb => !cb.checked);
+  checkboxes.forEach(cb => {
+    cb.checked = anyUnchecked;
+  });
+}
+
+function toggleRow(moduleCode) {
+  const checkboxes = document.querySelectorAll('.row-' + moduleCode);
+  const anyUnchecked = Array.from(checkboxes).some(cb => !cb.checked);
+  checkboxes.forEach(cb => {
+    cb.checked = anyUnchecked;
+  });
+}
+</script>
+{% endblock %}

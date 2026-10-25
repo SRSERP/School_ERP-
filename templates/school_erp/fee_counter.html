@@ -118,7 +118,7 @@
   </div>
 
   <!-- SECTION 2: 12-MONTH FEE CALENDAR & FEE COLLECTION FORM -->
-  <form method="POST" id="feeCounterForm">
+  <form method="POST" id="feeCounterForm" onsubmit="return validateAndPreventDoubleSubmit(this);">
     {% csrf_token %}
     <input type="hidden" name="student_id" value="{{ selected_student.id }}">
     <input type="hidden" name="submit_payment" value="1">
@@ -373,97 +373,500 @@
 
           <!-- 2. Book Set -->
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_books">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="include_books" id="chk_books" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <input type="checkbox" name="include_books" id="chk_books" onchange="calcTotal(true)" style="width:18px; height:18px; cursor:pointer;" {% if item_purchases.books.purchased %}style="display:none;"{% endif %}>
                 <label for="chk_books" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
                   📚 Book Set
                 </label>
               </div>
+              {% if item_purchases.books.purchased %}
+                <span class="badge" style="background:#ecfdf5; color:#065f46; font-size:10.5px; font-weight:800; border:1px solid #a7f3d0;" title="Previously Paid">
+                  <i class="fa-solid fa-check"></i> Paid ({{ item_purchases.books.count }}x)
+                </span>
+              {% else %}
+                <span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:10px; font-weight:800;">
+                  1st Purchase
+                </span>
+              {% endif %}
             </div>
             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Full Book & Notebook Pack</div>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
-              <input type="number" step="1" name="book_set_amount" id="book_set_amount" 
-                     value="{{ default_book_set_amt|floatformat:0 }}" 
-                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
-            </div>
+
+            {% if item_purchases.books.purchased %}
+              <!-- ALREADY PURCHASED: Paid Info & Prior History -->
+              <div style="background:#f1f5f9; border-radius:6px; padding:6px 8px; margin-bottom:8px; font-size:11px; color:#475569;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Last: <strong>₹{{ item_purchases.books.last.amount|floatformat:0 }}</strong></span>
+                  <a href="{% url 'unified_receipt' item_purchases.books.last.receipt_id %}" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:700;">
+                    Slip #{{ item_purchases.books.last.receipt_no }} &raquo;
+                  </a>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-top:2px;">Paid on {{ item_purchases.books.last.paid_date }}</div>
+              </div>
+
+              {% if item_purchases.books.count > 1 %}
+              <details style="font-size:10px; color:#64748b; margin-bottom:8px;">
+                <summary style="cursor:pointer; font-weight:700; color:#2563eb;">View all {{ item_purchases.books.count }} previous purchases</summary>
+                <div style="margin-top:4px; padding:4px; background:#fff; border-radius:4px; border:1px solid #e2e8f0;">
+                  {% for p in item_purchases.books.history %}
+                  <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid #f1f5f9;">
+                    <span>#{{ p.purchase_num }}: {{ p.paid_date }}</span>
+                    <strong>₹{{ p.amount|floatformat:0 }} ({{ p.receipt_no }})</strong>
+                  </div>
+                  {% endfor %}
+                </div>
+              </details>
+              {% endif %}
+
+              <!-- BUY AGAIN / REPLACEMENT ACTION -->
+              <button type="button" 
+                      id="btn_rep_books" 
+                      onclick="toggleReplacement('books', {{ default_book_set_amt|floatformat:0 }})" 
+                      class="btn btn-sm" 
+                      style="width:100%; font-size:11.5px; font-weight:800; background:#eff6ff; color:#1d4ed8; border:1.5px solid #93c5fd; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <i class="fa-solid fa-rotate"></i> Buy Again / Replacement (+₹{{ default_book_set_amt|floatformat:0 }})
+              </button>
+
+              <div id="panel_rep_books" style="display:none; margin-top:8px; padding:10px; background:#eff6ff; border:1.5px solid #3b82f6; border-radius:8px;">
+                <input type="hidden" name="is_replacement_books" id="is_rep_books" value="0">
+                <input type="hidden" name="rep_num_books" value="{{ item_purchases.books.next_num }}">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:11px; font-weight:800; color:#1e3a8a;">
+                    <i class="fa-solid fa-cart-plus"></i> New Demand #{{ item_purchases.books.next_num }}
+                  </span>
+                  <span class="badge" style="background:#bfdbfe; color:#1e40af; font-size:10px; font-weight:800;">
+                    New Fee Demand
+                  </span>
+                </div>
+
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10.5px; font-weight:700; color:#334155; display:block; margin-bottom:2px;">Reason / Note:</label>
+                  <select name="reason_books" id="reason_books" class="form-select" style="height:28px; font-size:11px; padding:2px 6px;">
+                    <option value="Lost / Replacement">Lost / Replacement</option>
+                    <option value="Damaged / Torn">Damaged / Torn</option>
+                    <option value="Additional Set">Additional Set</option>
+                    <option value="Term 2 / Part 2">Term 2 / Next Semester Books</option>
+                  </select>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                  <span style="font-size:11px; font-weight:700; color:#334155;">Charge Amount:</span>
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#1e3a8a;">₹</span>
+                    <input type="number" step="1" name="book_set_amount" id="book_set_amount" 
+                           value="{{ default_book_set_amt|floatformat:0 }}" 
+                           class="form-input" style="width:85px; height:28px; font-weight:800; color:#0f172a; font-size:0.85rem; text-align:right;" oninput="calcTotal(true)">
+                  </div>
+                </div>
+              </div>
+
+            {% else %}
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+                <input type="number" step="1" name="book_set_amount" id="book_set_amount" 
+                       value="{{ default_book_set_amt|floatformat:0 }}" 
+                       class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal(true)">
+              </div>
+            {% endif %}
           </div>
 
           <!-- 3. School Uniform / Dress -->
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_dress">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="include_dress" id="chk_dress" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <input type="checkbox" name="include_dress" id="chk_dress" onchange="calcTotal(true)" style="width:18px; height:18px; cursor:pointer;" {% if item_purchases.dress.purchased %}style="display:none;"{% endif %}>
                 <label for="chk_dress" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
                   👔 Uniform / Dress
                 </label>
               </div>
+              {% if item_purchases.dress.purchased %}
+                <span class="badge" style="background:#ecfdf5; color:#065f46; font-size:10.5px; font-weight:800; border:1px solid #a7f3d0;" title="Previously Paid">
+                  <i class="fa-solid fa-check"></i> Paid ({{ item_purchases.dress.count }}x)
+                </span>
+              {% else %}
+                <span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:10px; font-weight:800;">
+                  1st Purchase
+                </span>
+              {% endif %}
             </div>
             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Standard School Uniform Set</div>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
-              <input type="number" step="1" name="dress_amount" id="dress_amount" 
-                     value="{{ default_dress_amt|floatformat:0 }}" 
-                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
-            </div>
+
+            {% if item_purchases.dress.purchased %}
+              <!-- ALREADY PURCHASED: Paid Info & Prior History -->
+              <div style="background:#f1f5f9; border-radius:6px; padding:6px 8px; margin-bottom:8px; font-size:11px; color:#475569;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Last: <strong>₹{{ item_purchases.dress.last.amount|floatformat:0 }}</strong></span>
+                  <a href="{% url 'unified_receipt' item_purchases.dress.last.receipt_id %}" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:700;">
+                    Slip #{{ item_purchases.dress.last.receipt_no }} &raquo;
+                  </a>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-top:2px;">Paid on {{ item_purchases.dress.last.paid_date }}</div>
+              </div>
+
+              {% if item_purchases.dress.count > 1 %}
+              <details style="font-size:10px; color:#64748b; margin-bottom:8px;">
+                <summary style="cursor:pointer; font-weight:700; color:#2563eb;">View all {{ item_purchases.dress.count }} previous purchases</summary>
+                <div style="margin-top:4px; padding:4px; background:#fff; border-radius:4px; border:1px solid #e2e8f0;">
+                  {% for p in item_purchases.dress.history %}
+                  <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid #f1f5f9;">
+                    <span>#{{ p.purchase_num }}: {{ p.paid_date }}</span>
+                    <strong>₹{{ p.amount|floatformat:0 }} ({{ p.receipt_no }})</strong>
+                  </div>
+                  {% endfor %}
+                </div>
+              </details>
+              {% endif %}
+
+              <!-- BUY AGAIN / REPLACEMENT ACTION -->
+              <button type="button" 
+                      id="btn_rep_dress" 
+                      onclick="toggleReplacement('dress', {{ default_dress_amt|floatformat:0 }})" 
+                      class="btn btn-sm" 
+                      style="width:100%; font-size:11.5px; font-weight:800; background:#eff6ff; color:#1d4ed8; border:1.5px solid #93c5fd; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <i class="fa-solid fa-rotate"></i> Buy Again / Replacement (+₹{{ default_dress_amt|floatformat:0 }})
+              </button>
+
+              <div id="panel_rep_dress" style="display:none; margin-top:8px; padding:10px; background:#eff6ff; border:1.5px solid #3b82f6; border-radius:8px;">
+                <input type="hidden" name="is_replacement_dress" id="is_rep_dress" value="0">
+                <input type="hidden" name="rep_num_dress" value="{{ item_purchases.dress.next_num }}">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:11px; font-weight:800; color:#1e3a8a;">
+                    <i class="fa-solid fa-cart-plus"></i> New Demand #{{ item_purchases.dress.next_num }}
+                  </span>
+                  <span class="badge" style="background:#bfdbfe; color:#1e40af; font-size:10px; font-weight:800;">
+                    New Fee Demand
+                  </span>
+                </div>
+
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10.5px; font-weight:700; color:#334155; display:block; margin-bottom:2px;">Reason / Note:</label>
+                  <select name="reason_dress" id="reason_dress" class="form-select" style="height:28px; font-size:11px; padding:2px 6px;">
+                    <option value="Additional Set">Additional Set</option>
+                    <option value="Size Outgrown">Size Outgrown / Changed</option>
+                    <option value="Damaged / Torn">Damaged / Torn</option>
+                    <option value="Winter Uniform">Winter Uniform Addition</option>
+                  </select>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                  <span style="font-size:11px; font-weight:700; color:#334155;">Charge Amount:</span>
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#1e3a8a;">₹</span>
+                    <input type="number" step="1" name="dress_amount" id="dress_amount" 
+                           value="{{ default_dress_amt|floatformat:0 }}" 
+                           class="form-input" style="width:85px; height:28px; font-weight:800; color:#0f172a; font-size:0.85rem; text-align:right;" oninput="calcTotal(true)">
+                  </div>
+                </div>
+              </div>
+
+            {% else %}
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+                <input type="number" step="1" name="dress_amount" id="dress_amount" 
+                       value="{{ default_dress_amt|floatformat:0 }}" 
+                       class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal(true)">
+              </div>
+            {% endif %}
           </div>
 
           <!-- 4. Tie & Belt -->
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_tie_belt">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="include_tie_belt" id="chk_tie_belt" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <input type="checkbox" name="include_tie_belt" id="chk_tie_belt" onchange="calcTotal(true)" style="width:18px; height:18px; cursor:pointer;" {% if item_purchases.tie_belt.purchased %}style="display:none;"{% endif %}>
                 <label for="chk_tie_belt" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
                   🎗️ Tie & Belt
                 </label>
               </div>
+              {% if item_purchases.tie_belt.purchased %}
+                <span class="badge" style="background:#ecfdf5; color:#065f46; font-size:10.5px; font-weight:800; border:1px solid #a7f3d0;" title="Previously Paid">
+                  <i class="fa-solid fa-check"></i> Paid ({{ item_purchases.tie_belt.count }}x)
+                </span>
+              {% else %}
+                <span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:10px; font-weight:800;">
+                  1st Purchase
+                </span>
+              {% endif %}
             </div>
             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">School Monogram Tie & Belt</div>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
-              <input type="number" step="1" name="tie_belt_amount" id="tie_belt_amount" 
-                     value="{{ default_tie_belt_amt|floatformat:0 }}" 
-                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
-            </div>
+
+            {% if item_purchases.tie_belt.purchased %}
+              <!-- ALREADY PURCHASED: Paid Info & Prior History -->
+              <div style="background:#f1f5f9; border-radius:6px; padding:6px 8px; margin-bottom:8px; font-size:11px; color:#475569;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Last: <strong>₹{{ item_purchases.tie_belt.last.amount|floatformat:0 }}</strong></span>
+                  <a href="{% url 'unified_receipt' item_purchases.tie_belt.last.receipt_id %}" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:700;">
+                    Slip #{{ item_purchases.tie_belt.last.receipt_no }} &raquo;
+                  </a>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-top:2px;">Paid on {{ item_purchases.tie_belt.last.paid_date }}</div>
+              </div>
+
+              {% if item_purchases.tie_belt.count > 1 %}
+              <details style="font-size:10px; color:#64748b; margin-bottom:8px;">
+                <summary style="cursor:pointer; font-weight:700; color:#2563eb;">View all {{ item_purchases.tie_belt.count }} previous purchases</summary>
+                <div style="margin-top:4px; padding:4px; background:#fff; border-radius:4px; border:1px solid #e2e8f0;">
+                  {% for p in item_purchases.tie_belt.history %}
+                  <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid #f1f5f9;">
+                    <span>#{{ p.purchase_num }}: {{ p.paid_date }}</span>
+                    <strong>₹{{ p.amount|floatformat:0 }} ({{ p.receipt_no }})</strong>
+                  </div>
+                  {% endfor %}
+                </div>
+              </details>
+              {% endif %}
+
+              <!-- BUY AGAIN / REPLACEMENT ACTION -->
+              <button type="button" 
+                      id="btn_rep_tie_belt" 
+                      onclick="toggleReplacement('tie_belt', {{ default_tie_belt_amt|floatformat:0 }})" 
+                      class="btn btn-sm" 
+                      style="width:100%; font-size:11.5px; font-weight:800; background:#eff6ff; color:#1d4ed8; border:1.5px solid #93c5fd; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <i class="fa-solid fa-rotate"></i> Buy Again / Replacement (+₹{{ default_tie_belt_amt|floatformat:0 }})
+              </button>
+
+              <div id="panel_rep_tie_belt" style="display:none; margin-top:8px; padding:10px; background:#eff6ff; border:1.5px solid #3b82f6; border-radius:8px;">
+                <input type="hidden" name="is_replacement_tie_belt" id="is_rep_tie_belt" value="0">
+                <input type="hidden" name="rep_num_tie_belt" value="{{ item_purchases.tie_belt.next_num }}">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:11px; font-weight:800; color:#1e3a8a;">
+                    <i class="fa-solid fa-cart-plus"></i> New Demand #{{ item_purchases.tie_belt.next_num }}
+                  </span>
+                  <span class="badge" style="background:#bfdbfe; color:#1e40af; font-size:10px; font-weight:800;">
+                    New Fee Demand
+                  </span>
+                </div>
+
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10.5px; font-weight:700; color:#334155; display:block; margin-bottom:2px;">Reason / Note:</label>
+                  <select name="reason_tie_belt" id="reason_tie_belt" class="form-select" style="height:28px; font-size:11px; padding:2px 6px;">
+                    <option value="Lost / Replacement">Lost / Replacement</option>
+                    <option value="Damaged / Torn">Damaged / Torn</option>
+                    <option value="Additional Set">Additional Set</option>
+                    <option value="Size Change">Size Change</option>
+                  </select>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                  <span style="font-size:11px; font-weight:700; color:#334155;">Charge Amount:</span>
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#1e3a8a;">₹</span>
+                    <input type="number" step="1" name="tie_belt_amount" id="tie_belt_amount" 
+                           value="{{ default_tie_belt_amt|floatformat:0 }}" 
+                           class="form-input" style="width:85px; height:28px; font-weight:800; color:#0f172a; font-size:0.85rem; text-align:right;" oninput="calcTotal(true)">
+                  </div>
+                </div>
+              </div>
+
+            {% else %}
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+                <input type="number" step="1" name="tie_belt_amount" id="tie_belt_amount" 
+                       value="{{ default_tie_belt_amt|floatformat:0 }}" 
+                       class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal(true)">
+              </div>
+            {% endif %}
           </div>
 
           <!-- 5. School Diary -->
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_diary">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="include_diary" id="chk_diary" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <input type="checkbox" name="include_diary" id="chk_diary" onchange="calcTotal(true)" style="width:18px; height:18px; cursor:pointer;" {% if item_purchases.diary.purchased %}style="display:none;"{% endif %}>
                 <label for="chk_diary" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
                   📔 School Diary
                 </label>
               </div>
+              {% if item_purchases.diary.purchased %}
+                <span class="badge" style="background:#ecfdf5; color:#065f46; font-size:10.5px; font-weight:800; border:1px solid #a7f3d0;" title="Previously Paid">
+                  <i class="fa-solid fa-check"></i> Paid ({{ item_purchases.diary.count }}x)
+                </span>
+              {% else %}
+                <span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:10px; font-weight:800;">
+                  1st Purchase
+                </span>
+              {% endif %}
             </div>
             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Academic Almanac / Diary</div>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
-              <input type="number" step="1" name="diary_amount" id="diary_amount" 
-                     value="{{ default_diary_amt|floatformat:0 }}" 
-                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
-            </div>
+
+            {% if item_purchases.diary.purchased %}
+              <!-- ALREADY PURCHASED: Paid Info & Prior History -->
+              <div style="background:#f1f5f9; border-radius:6px; padding:6px 8px; margin-bottom:8px; font-size:11px; color:#475569;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Last: <strong>₹{{ item_purchases.diary.last.amount|floatformat:0 }}</strong></span>
+                  <a href="{% url 'unified_receipt' item_purchases.diary.last.receipt_id %}" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:700;">
+                    Slip #{{ item_purchases.diary.last.receipt_no }} &raquo;
+                  </a>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-top:2px;">Paid on {{ item_purchases.diary.last.paid_date }}</div>
+              </div>
+
+              {% if item_purchases.diary.count > 1 %}
+              <details style="font-size:10px; color:#64748b; margin-bottom:8px;">
+                <summary style="cursor:pointer; font-weight:700; color:#2563eb;">View all {{ item_purchases.diary.count }} previous purchases</summary>
+                <div style="margin-top:4px; padding:4px; background:#fff; border-radius:4px; border:1px solid #e2e8f0;">
+                  {% for p in item_purchases.diary.history %}
+                  <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid #f1f5f9;">
+                    <span>#{{ p.purchase_num }}: {{ p.paid_date }}</span>
+                    <strong>₹{{ p.amount|floatformat:0 }} ({{ p.receipt_no }})</strong>
+                  </div>
+                  {% endfor %}
+                </div>
+              </details>
+              {% endif %}
+
+              <!-- BUY AGAIN / REPLACEMENT ACTION -->
+              <button type="button" 
+                      id="btn_rep_diary" 
+                      onclick="toggleReplacement('diary', {{ default_diary_amt|floatformat:0 }})" 
+                      class="btn btn-sm" 
+                      style="width:100%; font-size:11.5px; font-weight:800; background:#eff6ff; color:#1d4ed8; border:1.5px solid #93c5fd; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <i class="fa-solid fa-rotate"></i> Buy Again / Replacement (+₹{{ default_diary_amt|floatformat:0 }})
+              </button>
+
+              <div id="panel_rep_diary" style="display:none; margin-top:8px; padding:10px; background:#eff6ff; border:1.5px solid #3b82f6; border-radius:8px;">
+                <input type="hidden" name="is_replacement_diary" id="is_rep_diary" value="0">
+                <input type="hidden" name="rep_num_diary" value="{{ item_purchases.diary.next_num }}">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:11px; font-weight:800; color:#1e3a8a;">
+                    <i class="fa-solid fa-cart-plus"></i> New Demand #{{ item_purchases.diary.next_num }}
+                  </span>
+                  <span class="badge" style="background:#bfdbfe; color:#1e40af; font-size:10px; font-weight:800;">
+                    New Fee Demand
+                  </span>
+                </div>
+
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10.5px; font-weight:700; color:#334155; display:block; margin-bottom:2px;">Reason / Note:</label>
+                  <select name="reason_diary" id="reason_diary" class="form-select" style="height:28px; font-size:11px; padding:2px 6px;">
+                    <option value="Lost / Replacement">Lost / Replacement</option>
+                    <option value="Pages Filled">Pages Filled / New Volume</option>
+                    <option value="Damaged">Damaged / Torn</option>
+                  </select>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                  <span style="font-size:11px; font-weight:700; color:#334155;">Charge Amount:</span>
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#1e3a8a;">₹</span>
+                    <input type="number" step="1" name="diary_amount" id="diary_amount" 
+                           value="{{ default_diary_amt|floatformat:0 }}" 
+                           class="form-input" style="width:85px; height:28px; font-weight:800; color:#0f172a; font-size:0.85rem; text-align:right;" oninput="calcTotal(true)">
+                  </div>
+                </div>
+              </div>
+
+            {% else %}
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+                <input type="number" step="1" name="diary_amount" id="diary_amount" 
+                       value="{{ default_diary_amt|floatformat:0 }}" 
+                       class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal(true)">
+              </div>
+            {% endif %}
           </div>
 
           <!-- 6. Student ID Card -->
           <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; transition:border-color 0.2s;" id="box_id_card">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
               <div style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" name="include_id_card" id="chk_id_card" onchange="calcTotal()" style="width:18px; height:18px; cursor:pointer;">
+                <input type="checkbox" name="include_id_card" id="chk_id_card" onchange="calcTotal(true)" style="width:18px; height:18px; cursor:pointer;" {% if item_purchases.id_card.purchased %}style="display:none;"{% endif %}>
                 <label for="chk_id_card" style="font-weight:800; color:#0f172a; cursor:pointer; font-size:0.9rem; margin:0;">
                   🪪 Student ID Card
                 </label>
               </div>
+              {% if item_purchases.id_card.purchased %}
+                <span class="badge" style="background:#ecfdf5; color:#065f46; font-size:10.5px; font-weight:800; border:1px solid #a7f3d0;" title="Previously Paid">
+                  <i class="fa-solid fa-check"></i> Paid ({{ item_purchases.id_card.count }}x)
+                </span>
+              {% else %}
+                <span class="badge" style="background:#e0e7ff; color:#3730a3; font-size:10px; font-weight:800;">
+                  1st Purchase
+                </span>
+              {% endif %}
             </div>
             <div style="font-size:11px; color:#64748b; margin-bottom:6px;">Smart RFID / Barcode Card</div>
-            <div style="display:flex; align-items:center; gap:6px;">
-              <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
-              <input type="number" step="1" name="id_card_amount" id="id_card_amount" 
-                     value="{{ default_id_card_amt|floatformat:0 }}" 
-                     class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal()">
-            </div>
+
+            {% if item_purchases.id_card.purchased %}
+              <!-- ALREADY PURCHASED: Paid Info & Prior History -->
+              <div style="background:#f1f5f9; border-radius:6px; padding:6px 8px; margin-bottom:8px; font-size:11px; color:#475569;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span>Last: <strong>₹{{ item_purchases.id_card.last.amount|floatformat:0 }}</strong></span>
+                  <a href="{% url 'unified_receipt' item_purchases.id_card.last.receipt_id %}" target="_blank" style="color:#2563eb; text-decoration:none; font-weight:700;">
+                    Slip #{{ item_purchases.id_card.last.receipt_no }} &raquo;
+                  </a>
+                </div>
+                <div style="font-size:10px; color:#64748b; margin-top:2px;">Paid on {{ item_purchases.id_card.last.paid_date }}</div>
+              </div>
+
+              {% if item_purchases.id_card.count > 1 %}
+              <details style="font-size:10px; color:#64748b; margin-bottom:8px;">
+                <summary style="cursor:pointer; font-weight:700; color:#2563eb;">View all {{ item_purchases.id_card.count }} previous purchases</summary>
+                <div style="margin-top:4px; padding:4px; background:#fff; border-radius:4px; border:1px solid #e2e8f0;">
+                  {% for p in item_purchases.id_card.history %}
+                  <div style="display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid #f1f5f9;">
+                    <span>#{{ p.purchase_num }}: {{ p.paid_date }}</span>
+                    <strong>₹{{ p.amount|floatformat:0 }} ({{ p.receipt_no }})</strong>
+                  </div>
+                  {% endfor %}
+                </div>
+              </details>
+              {% endif %}
+
+              <!-- BUY AGAIN / REPLACEMENT ACTION -->
+              <button type="button" 
+                      id="btn_rep_id_card" 
+                      onclick="toggleReplacement('id_card', {{ default_id_card_amt|floatformat:0 }})" 
+                      class="btn btn-sm" 
+                      style="width:100%; font-size:11.5px; font-weight:800; background:#eff6ff; color:#1d4ed8; border:1.5px solid #93c5fd; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <i class="fa-solid fa-rotate"></i> Buy Again / Replacement (+₹{{ default_id_card_amt|floatformat:0 }})
+              </button>
+
+              <div id="panel_rep_id_card" style="display:none; margin-top:8px; padding:10px; background:#eff6ff; border:1.5px solid #3b82f6; border-radius:8px;">
+                <input type="hidden" name="is_replacement_id_card" id="is_rep_id_card" value="0">
+                <input type="hidden" name="rep_num_id_card" value="{{ item_purchases.id_card.next_num }}">
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span style="font-size:11px; font-weight:800; color:#1e3a8a;">
+                    <i class="fa-solid fa-cart-plus"></i> New Demand #{{ item_purchases.id_card.next_num }}
+                  </span>
+                  <span class="badge" style="background:#bfdbfe; color:#1e40af; font-size:10px; font-weight:800;">
+                    New Fee Demand
+                  </span>
+                </div>
+
+                <div style="margin-bottom:6px;">
+                  <label style="font-size:10.5px; font-weight:700; color:#334155; display:block; margin-bottom:2px;">Reason / Note:</label>
+                  <select name="reason_id_card" id="reason_id_card" class="form-select" style="height:28px; font-size:11px; padding:2px 6px;">
+                    <option value="Lost ID Card">Lost ID Card (Duplicate)</option>
+                    <option value="Broken / Damaged">Broken / Damaged Card</option>
+                    <option value="Info Correction">Info / Photo Correction Reissue</option>
+                  </select>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                  <span style="font-size:11px; font-weight:700; color:#334155;">Charge Amount:</span>
+                  <div style="display:flex; align-items:center; gap:4px;">
+                    <span style="font-weight:700; font-size:0.85rem; color:#1e3a8a;">₹</span>
+                    <input type="number" step="1" name="id_card_amount" id="id_card_amount" 
+                           value="{{ default_id_card_amt|floatformat:0 }}" 
+                           class="form-input" style="width:85px; height:28px; font-weight:800; color:#0f172a; font-size:0.85rem; text-align:right;" oninput="calcTotal(true)">
+                  </div>
+                </div>
+              </div>
+
+            {% else %}
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span style="font-weight:700; font-size:0.85rem; color:#475569;">₹</span>
+                <input type="number" step="1" name="id_card_amount" id="id_card_amount" 
+                       value="{{ default_id_card_amt|floatformat:0 }}" 
+                       class="form-input" style="height:34px; font-weight:800; color:#0f172a; font-size:0.9rem;" oninput="calcTotal(true)">
+              </div>
+            {% endif %}
           </div>
 
           <!-- 7. Transport / Bus Fee -->
@@ -562,39 +965,101 @@
 
       </div>
 
-      <!-- Payment Method & Txn Details Grid -->
-      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:1.25rem;">
+      <!-- SIBLING & CONCESSION ALERT (IF SIBLINGS DETECTED) -->
+      {% if sibling_students %}
+      <div style="background:#eff6ff; border:1.5px solid #93c5fd; border-radius:10px; padding:12px 16px; margin-bottom:1.25rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="width:32px; height:32px; border-radius:8px; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px;">
+            <i class="fa-solid fa-users"></i>
+          </span>
+          <div>
+            <div style="font-weight:800; color:#1e3a8a; font-size:13px;">Sibling Enrolled in School:</div>
+            <div style="font-size:12px; color:#3b82f6;">
+              {% for sib in sibling_students %}
+              <strong>{{ sib.full_name }}</strong> (Class {{ sib.class_level.name }}-Sec {{ sib.section.name }}, Adm: {{ sib.admission_number }}){% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <button type="button" onclick="applyConcessionPercent(20, 'Sibling Discount (20%)')" class="btn btn-sm btn-primary" style="background:#2563eb; font-weight:800; font-size:11.5px;">
+          <i class="fa-solid fa-tag"></i> Apply 20% Sibling Discount
+        </button>
+      </div>
+      {% endif %}
+
+      <!-- Payment Method, Concession, Fine & Txn Details Grid -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:1.25rem; margin-bottom:1rem;">
         
+        <!-- Concession Type -->
+        <div>
+          <label class="form-label" style="font-weight:700;">Concession / Scholarship:</label>
+          <select name="concession_type" id="concession_type" class="form-select" onchange="onConcessionSelect(this.value)">
+            <option value="">No Concession</option>
+            <option value="Sibling Discount">Sibling Discount (20%)</option>
+            <option value="Merit Scholarship">Merit Scholarship (25%)</option>
+            <option value="Staff Ward">Staff Ward Concession (50%)</option>
+            <option value="EWS / Need Based">EWS / Need Concession (30%)</option>
+            <option value="Management Discretion">Management Special Waiver</option>
+          </select>
+        </div>
+
+        <!-- Discount Amount -->
         <div>
           <label class="form-label" style="font-weight:700;">Discount / Concession (₹):</label>
           <input type="number" step="1" name="discount" id="discount" value="0" class="form-input" style="font-weight:700;" oninput="calcTotal(true)">
         </div>
 
+        <!-- Late Fine -->
         <div>
-          <label class="form-label" style="font-weight:700;">Payment Mode *:</label>
-          <select name="payment_method" class="form-select" style="font-weight:700;">
-            <option value="Cash">Cash</option>
-            <option value="UPI / QR">UPI / QR (PhonePe, GPay, Paytm)</option>
-            <option value="Debit/Credit Card">Debit / Credit Card</option>
-            <option value="Net Banking">Net Banking</option>
-            <option value="Cheque / DD">Cheque / Demand Draft</option>
-          </select>
+          <label class="form-label" style="font-weight:700;">Late Fine (₹):</label>
+          <input type="number" step="1" name="fine_amount" id="fine_amount" value="0" class="form-input" style="font-weight:700; color:#dc2626;" oninput="calcTotal(true)">
         </div>
 
+        <!-- Fine Waived -->
         <div>
-          <label class="form-label" style="font-weight:700;">Txn Ref / Cheque No / Notes:</label>
-          <input type="text" name="transaction_reference" placeholder="e.g. UPI-88902 or Cheque #1234" class="form-input">
+          <label class="form-label" style="font-weight:700;">Fine Waived (₹):</label>
+          <input type="number" step="1" name="fine_waived" id="fine_waived" value="0" class="form-input" style="font-weight:700; color:#059669;" oninput="calcTotal(true)">
         </div>
 
+      </div>
+
+      <!-- Payment Mode & College QR Section -->
+      <div style="background:#f1f5f9; border:1.5px solid #cbd5e1; border-radius:10px; padding:1.25rem;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; align-items:center;">
+          
+          <div>
+            <label class="form-label" style="font-weight:700;">Payment Mode *:</label>
+            <select name="payment_method" id="payment_method" class="form-select" style="font-weight:800;" onchange="onPaymentModeChange(this.value)">
+              <option value="Cash">Cash (Currency)</option>
+              <option value="UPI / QR">UPI / QR (GPay, PhonePe, Paytm, BHIM)</option>
+              <option value="Debit/Credit Card">Debit / Credit Card</option>
+              <option value="Net Banking">Net Banking / NEFT</option>
+              <option value="Cheque / DD">Cheque / Demand Draft</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label" style="font-weight:700;">Txn Ref / UTR / Cheque No *:</label>
+            <input type="text" name="transaction_reference" id="transaction_reference" placeholder="e.g. UTR / UPI Ref (Mandatory for UPI)" class="form-input" style="font-weight:700;">
+          </div>
+
+          <!-- COLLEGE QR BUTTON -->
+          <div style="padding-top:20px;">
+            <button type="button" onclick="openCollegeQRModal()" class="btn btn-primary" style="width:100%; height:42px; background:linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); border-color:#4338ca; font-weight:800; display:inline-flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 4px 12px rgba(79,70,229,0.3);">
+              <i class="fa-solid fa-qrcode" style="font-size:18px;"></i> Show College UPI QR Code
+            </button>
+          </div>
+
+        </div>
       </div>
 
       <!-- Submit & Generate Receipt Action Bar -->
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:1.5rem; padding-top:1.25rem; border-top:2px solid #e2e8f0; flex-wrap:wrap; gap:12px;">
         <div style="font-size:0.85rem; color:#64748b;">
-          <i class="fa-solid fa-receipt"></i> Submitting will automatically generate an <strong>official combined fee receipt</strong> ready for printing.
+          <i class="fa-solid fa-shield-check" style="color:#059669;"></i> Idempotent duplicate transaction detection active • Double receipts blocked.
         </div>
 
-        <button type="submit" class="btn btn-primary" style="padding:14px 36px; font-size:1.1rem; font-weight:800; background:linear-gradient(135deg, #059669 0%, #047857 100%); border-color:#059669; box-shadow:0 4px 14px rgba(5,150,105,0.35);">
+        <button type="submit" id="submitPaymentBtn" class="btn btn-primary" style="padding:14px 36px; font-size:1.1rem; font-weight:800; background:linear-gradient(135deg, #059669 0%, #047857 100%); border-color:#059669; box-shadow:0 4px 14px rgba(5,150,105,0.35);">
           <i class="fa-solid fa-print"></i> Collect Payment & Print Combined Fee Slip
         </button>
       </div>
@@ -602,6 +1067,64 @@
     </div>
 
   </form>
+
+  <!-- COLLEGE UPI QR CODE MODAL -->
+  <div id="collegeQRModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.75); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:#ffffff; border-radius:18px; width:92%; max-width:440px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.35); overflow:hidden; text-align:center;">
+      
+      <!-- Modal Header -->
+      <div style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color:#fff; padding:18px 24px; position:relative;">
+        <button type="button" onclick="closeCollegeQRModal()" style="position:absolute; top:16px; right:16px; background:rgba(255,255,255,0.15); border:none; color:#fff; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div style="width:42px; height:42px; border-radius:12px; background:rgba(255,255,255,0.15); display:inline-flex; align-items:center; justify-content:center; margin-bottom:8px; font-size:20px; color:#38bdf8;">
+          <i class="fa-solid fa-qrcode"></i>
+        </div>
+        <h3 style="margin:0; font-size:17px; font-weight:800; color:#fff;">College UPI QR Code</h3>
+        <p style="margin:4px 0 0 0; font-size:12px; color:#c7d2fe;">{{ school.name }}</p>
+      </div>
+
+      <!-- Modal Body -->
+      <div style="padding:24px;">
+        
+        <!-- Live QR Code Canvas / Container -->
+        <div style="background:#ffffff; border:2px solid #e2e8f0; border-radius:16px; padding:14px; display:inline-block; margin-bottom:14px; box-shadow:0 4px 16px rgba(0,0,0,0.06);">
+          {% if school.upi_qr_code %}
+          <img id="staticQRImg" src="{{ school.upi_qr_code.url }}" alt="College Bank QR" style="width:210px; height:210px; object-fit:contain; display:block;">
+          {% else %}
+          <img id="dynamicQRImg" src="https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=upi://pay?pa={{ school.upi_id|default:'srsschool@upi' }}&pn={{ school.upi_payee_name|default:school.name|urlencode }}&cu=INR" alt="Dynamic UPI QR" style="width:210px; height:210px; display:block;">
+          {% endif %}
+        </div>
+
+        <!-- Amount Badge -->
+        <div style="margin-bottom:12px;">
+          <span style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b;">Amount to Pay:</span>
+          <div id="modalPayingAmount" style="font-size:26px; font-weight:900; color:#059669; line-height:1.2;">₹0</div>
+        </div>
+
+        <!-- UPI ID & Copy Box -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:10px 14px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="text-align:left;">
+            <span style="font-size:10px; text-transform:uppercase; color:#64748b; font-weight:800; display:block;">UPI ID (VPA):</span>
+            <code id="modalUpiId" style="font-size:13px; font-weight:800; color:#1e1b4b;">{{ school.upi_id|default:"srsschool@upi" }}</code>
+          </div>
+          <button type="button" onclick="copyUpiId()" class="btn btn-secondary btn-sm" style="font-size:11px; font-weight:700;">
+            <i class="fa-regular fa-copy"></i> Copy
+          </button>
+        </div>
+
+        <div style="font-size:11.5px; color:#64748b; margin-bottom:16px; line-height:1.4;">
+          <i class="fa-solid fa-mobile-screen-button" style="color:#4f46e5;"></i> Scan using <strong>Google Pay, PhonePe, Paytm, BHIM</strong> or any UPI banking app.
+        </div>
+
+        <!-- Action Button -->
+        <button type="button" onclick="confirmQRPayment()" class="btn btn-primary" style="width:100%; padding:12px; font-size:13px; font-weight:800; background:#059669; border-color:#059669;">
+          <i class="fa-solid fa-check-circle"></i> Student Paid via UPI — Fill Mode & UTR
+        </button>
+
+      </div>
+    </div>
+  </div>
 
   <!-- SECTION 6: STUDENT'S RECENT PAYMENT HISTORY -->
   {% if fee_details.receipts_history %}
@@ -820,6 +1343,47 @@
     calcTotal(true);
   }
 
+  // Toggle Buy Again / Replacement for physical items (Tie & Belt, Books, Uniform, Diary, ID Card)
+  function toggleReplacement(key, defaultPrice) {
+    const panel = document.getElementById("panel_rep_" + key);
+    const isRep = document.getElementById("is_rep_" + key);
+    const chk = document.getElementById("chk_" + key);
+    const btn = document.getElementById("btn_rep_" + key);
+    const box = document.getElementById("box_" + key);
+    if (!panel || !isRep || !chk) return;
+
+    if (panel.style.display === "none" || panel.style.display === "") {
+      panel.style.display = "block";
+      isRep.value = "1";
+      chk.checked = true;
+      if (box) {
+        box.style.borderColor = "#2563eb";
+        box.style.background = "#eff6ff";
+      }
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-xmark"></i> Cancel Replacement (Remove)`;
+        btn.style.background = "#fee2e2";
+        btn.style.color = "#991b1b";
+        btn.style.borderColor = "#fca5a5";
+      }
+    } else {
+      panel.style.display = "none";
+      isRep.value = "0";
+      chk.checked = false;
+      if (box) {
+        box.style.borderColor = "#e2e8f0";
+        box.style.background = "#f8fafc";
+      }
+      if (btn) {
+        btn.innerHTML = `<i class="fa-solid fa-rotate"></i> Buy Again / Replacement (+₹${defaultPrice})`;
+        btn.style.background = "#eff6ff";
+        btn.style.color = "#1d4ed8";
+        btn.style.borderColor = "#93c5fd";
+      }
+    }
+    calcTotal(true);
+  }
+
   // Unified Real-Time Calculation Logic
   function calcTotal(autoUpdatePayingNow = false) {
     const monthlyRate = parseFloat(document.getElementById("monthly_rate") ? document.getElementById("monthly_rate").value || 0 : 0);
@@ -897,11 +1461,14 @@
       document.getElementById("lbl_prev_due_cleared").innerText = "₹" + Math.round(prevDueCleared);
     }
 
-    // 6. Discount
+    // 6. Discount & Fine Calculation
     const discount = parseFloat(document.getElementById("discount") ? document.getElementById("discount").value || 0 : 0);
+    const fineAmount = parseFloat(document.getElementById("fine_amount") ? document.getElementById("fine_amount").value || 0 : 0);
+    const fineWaived = parseFloat(document.getElementById("fine_waived") ? document.getElementById("fine_waived").value || 0 : 0);
+    const netFine = Math.max(0, fineAmount - fineWaived);
 
     // Total Billed On This Slip
-    const totalBilledThisSlip = Math.max(0, (currentFeesSelected + prevDueCleared) - discount);
+    const totalBilledThisSlip = Math.max(0, (currentFeesSelected + prevDueCleared + netFine) - discount);
 
     // Auto-update amount paying now if requested (e.g. on checkbox clicks)
     const payingInput = document.getElementById("amount_paying_now");
@@ -912,7 +1479,7 @@
     const amountPaying = payingInput ? parseFloat(payingInput.value || 0) : 0;
 
     // Correct Remaining Balance Calculation (Discount is SUBTRACTED, NEVER added to due):
-    const netNewCharges = Math.max(0, currentFeesSelected - discount);
+    const netNewCharges = Math.max(0, currentFeesSelected + netFine - discount);
     const cashForOld = (chkPrev && chkPrev.checked) ? Math.min(amountPaying, prevDueCleared) : 0;
     const cashForNew = Math.max(0, amountPaying - cashForOld);
 
@@ -923,6 +1490,157 @@
     if (document.getElementById("lbl_final_balance")) {
       document.getElementById("lbl_final_balance").innerText = "₹" + Math.round(finalRemainingDue);
     }
+  }
+
+  // Payment Mode Change Handler
+  function onPaymentModeChange(val) {
+    const txnInput = document.getElementById("transaction_reference");
+    if (val === 'UPI / QR') {
+      if (txnInput) {
+        txnInput.setAttribute("placeholder", "Mandatory: Enter UPI UTR / Txn Reference (12 digits)");
+        txnInput.focus();
+      }
+      openCollegeQRModal();
+    } else if (val === 'Cash') {
+      if (txnInput) txnInput.setAttribute("placeholder", "Optional for Cash (e.g. Cash Receipt #)");
+    } else {
+      if (txnInput) txnInput.setAttribute("placeholder", "Enter " + val + " Reference / Cheque No");
+    }
+  }
+
+  // College UPI QR Modal Functions
+  function openCollegeQRModal() {
+    const modal = document.getElementById("collegeQRModal");
+    if (!modal) return;
+
+    const payingInput = document.getElementById("amount_paying_now");
+    const amount = payingInput ? (parseFloat(payingInput.value) || 0) : 0;
+
+    const amountEl = document.getElementById("modalPayingAmount");
+    if (amountEl) {
+      amountEl.innerText = "₹" + Math.round(amount);
+    }
+
+    const dynamicImg = document.getElementById("dynamicQRImg");
+    if (dynamicImg) {
+      const upiId = "{{ school.upi_id|default:'srsschool@upi' }}";
+      const payeeName = encodeURIComponent("{{ school.upi_payee_name|default:school.name }}");
+      const upiUri = `upi://pay?pa=${upiId}&pn=${payeeName}&am=${Math.round(amount)}&cu=INR`;
+      dynamicImg.src = "https://api.qrserver.com/v1/create-qr-code/?size=210x210&data=" + encodeURIComponent(upiUri);
+    }
+
+    modal.style.display = "flex";
+  }
+
+  function closeCollegeQRModal() {
+    const modal = document.getElementById("collegeQRModal");
+    if (modal) modal.style.display = "none";
+  }
+
+  function copyUpiId() {
+    const upiIdEl = document.getElementById("modalUpiId");
+    if (!upiIdEl) return;
+    const text = upiIdEl.innerText.trim();
+    navigator.clipboard.writeText(text).then(() => {
+      alert("College UPI ID copied: " + text);
+    }).catch(() => {
+      prompt("Copy College UPI ID:", text);
+    });
+  }
+
+  function confirmQRPayment() {
+    const modeSelect = document.getElementById("payment_method");
+    if (modeSelect) modeSelect.value = "UPI / QR";
+    closeCollegeQRModal();
+    const txnInput = document.getElementById("transaction_reference");
+    if (txnInput) {
+      txnInput.focus();
+      txnInput.style.borderColor = "#059669";
+      txnInput.style.background = "#ecfdf5";
+    }
+  }
+
+  // Concession & Sibling Discount Helpers
+  function onConcessionSelect(val) {
+    if (!val) {
+      const discInput = document.getElementById("discount");
+      if (discInput) discInput.value = 0;
+      calcTotal(true);
+      return;
+    }
+
+    let pct = 0;
+    if (val.includes("Sibling")) pct = 20;
+    else if (val.includes("Merit")) pct = 25;
+    else if (val.includes("Staff Ward")) pct = 50;
+    else if (val.includes("EWS")) pct = 30;
+
+    if (pct > 0) {
+      applyConcessionPercent(pct, val);
+    }
+  }
+
+  function applyConcessionPercent(pct, label) {
+    const select = document.getElementById("concession_type");
+    if (select) {
+      let found = false;
+      for (let opt of select.options) {
+        if (opt.value.includes(label.split(" ")[0])) {
+          select.value = opt.value;
+          found = true;
+          break;
+        }
+      }
+      if (!found) select.value = label;
+    }
+
+    // Calculate base current tuition / monthly rate
+    const monthlyRate = parseFloat(document.getElementById("monthly_rate") ? document.getElementById("monthly_rate").value || 0 : 0);
+    const checkedMonths = document.querySelectorAll(".month-chk:checked").length;
+    const baseAmount = checkedMonths > 0 ? (checkedMonths * monthlyRate) : monthlyRate;
+    
+    const calculatedDiscount = Math.round((baseAmount * pct) / 100);
+    const discInput = document.getElementById("discount");
+    if (discInput) {
+      discInput.value = calculatedDiscount;
+    }
+    calcTotal(true);
+  }
+
+  // Idempotency & Double Submit Prevention
+  let isFeeSubmitting = false;
+  function validateAndPreventDoubleSubmit(form) {
+    if (isFeeSubmitting) {
+      return false;
+    }
+
+    const payingInput = document.getElementById("amount_paying_now");
+    const amount = payingInput ? parseFloat(payingInput.value || 0) : 0;
+    if (amount <= 0) {
+      alert("Please enter a valid Amount to Collect (must be greater than ₹0).");
+      if (payingInput) payingInput.focus();
+      return false;
+    }
+
+    const method = document.getElementById("payment_method") ? document.getElementById("payment_method").value : "Cash";
+    const txnRef = document.getElementById("transaction_reference") ? document.getElementById("transaction_reference").value.trim() : "";
+    if (method === "UPI / QR" && !txnRef) {
+      const confirmContinue = confirm("No UPI Transaction Reference / UTR entered. For UPI collections, a UTR is required for reconciliation. Do you wish to enter it now?");
+      if (confirmContinue) {
+        const txnInput = document.getElementById("transaction_reference");
+        if (txnInput) txnInput.focus();
+        return false;
+      }
+    }
+
+    isFeeSubmitting = true;
+    const btn = document.getElementById("submitPaymentBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = "0.75";
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Processing Payment & Printing Slip...`;
+    }
+    return true;
   }
 </script>
 {% endblock %}

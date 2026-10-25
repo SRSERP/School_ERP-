@@ -1,0 +1,144 @@
+{% extends 'school_erp/saas_base.html' %}
+
+{% block title %}SaaS Backup Policy Configuration{% endblock %}
+{% block page_title %}Automated Backup Configuration (SaaS Control){% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+  <a href="{% url 'backup_history' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-clock-rotate-left" style="color:#38bdf8;"></i> Backup History
+  </a>
+  <a href="{% url 'backup_restore' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-rotate-left" style="color:#10b981;"></i> Restore Console
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:950px; margin:0 auto;">
+
+  <!-- School Selector Bar -->
+  <div class="card-panel" style="padding:1rem 1.5rem; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <i class="fa-solid fa-school" style="color:#2563eb; font-size:16px;"></i>
+      <span style="font-size:13px; font-weight:700; color:#334155;">Configure Backup Policy For School:</span>
+    </div>
+    <form method="GET" style="display:flex; align-items:center; gap:10px;">
+      <select name="school_id" class="form-select" style="font-size:13px; min-width:260px;" onchange="this.form.submit()">
+        {% for s in schools %}
+        <option value="{{ s.id }}" {% if selected_school_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }} ({{ s.school_code }})</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <!-- Info Banner -->
+  <div class="card-panel" style="padding:1.25rem; margin-bottom:1.5rem; background:linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border:1px solid #bfdbfe; display:flex; align-items:flex-start; gap:1rem;">
+    <div style="width:44px; height:44px; border-radius:10px; background:#2563eb; color:#fff; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0;">
+      <i class="fa-solid fa-shield-halved"></i>
+    </div>
+    <div>
+      <h4 style="margin:0 0 4px 0; color:#1e3a8a; font-size:1.05rem; font-weight:800;">Enterprise Backup &amp; Disaster Recovery Policy &bull; {{ school.name }}</h4>
+      <p style="margin:0; font-size:0.88rem; color:#3b82f6; line-height:1.5;">
+        Automated backups package the core relational database (SQLite) along with uploaded student photographs, identity documents, and school branding. Backups are encrypted and verified via SHA-256 integrity checksums in accordance with Government of India website security guidance and OWASP data protection standards.
+      </p>
+    </div>
+  </div>
+
+  <div class="card-panel" style="padding:2rem;">
+    <form method="POST" action="{% url 'backup_config' %}?school_id={{ school.id }}">
+      {% csrf_token %}
+      <input type="hidden" name="school_id" value="{{ school.id }}">
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.5rem; font-size:0.9rem;">
+            <i class="fa-solid fa-calendar-check" style="color:#6366f1;"></i> Backup Frequency
+          </label>
+          {{ form.backup_frequency }}
+          <small style="color:#64748b; font-size:0.8rem; display:block; margin-top:4px;">Scheduled automated execution cadence</small>
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.5rem; font-size:0.9rem;">
+            <i class="fa-solid fa-clock" style="color:#6366f1;"></i> Scheduled Time (24h)
+          </label>
+          {{ form.backup_time }}
+          <small style="color:#64748b; font-size:0.8rem; display:block; margin-top:4px;">Time to trigger routine backup (e.g. 02:00 AM off-peak)</small>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.5rem; font-size:0.9rem;">
+            <i class="fa-solid fa-box-archive" style="color:#0ea5e9;"></i> Retention Period (Days)
+          </label>
+          {{ form.retention_days }}
+          <small style="color:#64748b; font-size:0.8rem; display:block; margin-top:4px;">Archives older than this period are eligible for pruning</small>
+        </div>
+
+        <div>
+          <label style="display:block; font-weight:700; color:#334155; margin-bottom:0.5rem; font-size:0.9rem;">
+            <i class="fa-solid fa-server" style="color:#0ea5e9;"></i> Storage Location
+          </label>
+          {{ form.storage_location }}
+          <small style="color:#64748b; font-size:0.8rem; display:block; margin-top:4px;">Local secure disk or secondary offsite repository</small>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid #e2e8f0; border-bottom:1px solid #e2e8f0; padding:1.25rem 0; margin-bottom:1.5rem;">
+        <h5 style="margin:0 0 1rem 0; color:#0f172a; font-weight:800; font-size:0.95rem;">
+          <i class="fa-solid fa-file-shield" style="color:#10b981;"></i> Content Inclusions &amp; Encryption
+        </h5>
+
+        <div style="display:flex; flex-direction:column; gap:1rem;">
+          <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer;">
+            {{ form.include_database }}
+            <span style="font-size:0.92rem; color:#1e293b; font-weight:600;">
+              Include Core Database (SQLite / All Tables, Transactions, Users &amp; Results)
+            </span>
+          </label>
+
+          <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer;">
+            {{ form.include_media_files }}
+            <span style="font-size:0.92rem; color:#1e293b; font-weight:600;">
+              Include Uploaded Media &amp; Documents (Student Photos, Signatures, Logo Stamps)
+            </span>
+          </label>
+
+          <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer;">
+            {{ form.is_encryption_enabled }}
+            <span style="font-size:0.92rem; color:#1e293b; font-weight:600;">
+              Enable AES / Passphrase Encryption for Archives
+            </span>
+          </label>
+
+          <div style="margin-left:2rem; margin-top:0.25rem;">
+            <label style="display:block; font-weight:600; color:#475569; margin-bottom:0.35rem; font-size:0.85rem;">
+              Encryption Secret Passphrase
+            </label>
+            {{ form.encryption_passphrase }}
+          </div>
+
+          <label style="display:flex; align-items:center; gap:0.75rem; cursor:pointer; margin-top:0.5rem;">
+            {{ form.auto_backup_active }}
+            <span style="font-size:0.92rem; color:#1e293b; font-weight:700;">
+              Enable Automated Background Cron Trigger
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:0.85rem; color:#64748b;">
+          Last backup generated: <strong>{{ config.last_backup_at|date:"Y-m-d H:i"|default:"Never" }}</strong>
+        </span>
+        <button type="submit" class="btn btn-primary" style="padding:0.75rem 2rem; font-weight:700;">
+          <i class="fa-solid fa-floppy-disk"></i> Save Configuration
+        </button>
+      </div>
+    </form>
+  </div>
+
+</div>
+{% endblock %}

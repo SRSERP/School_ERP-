@@ -34,3 +34,5 @@ Thumbs.db
 tmp/
 stderr.log
 passenger_wsgi_orig.py
+scratch/
+staging_test/

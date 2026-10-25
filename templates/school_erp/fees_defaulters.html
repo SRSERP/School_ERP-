@@ -125,13 +125,6 @@
           {% endfor %}
         </select>
       </div>
-          {% for cl in classes %}
-          <option value="{{ cl.id }}" {% if selected_class|stringformat:'s' == cl.id|stringformat:'s' %}selected{% endif %}>
-            {{ cl.name }}
-          </option>
-          {% endfor %}
-        </select>
-      </div>
 
       <!-- Min Due Filter -->
       <div style="width:170px; flex-shrink:0;">

@@ -1,0 +1,186 @@
+{% extends 'school_erp/saas_base.html' %}
+
+{% block title %}SaaS Backup History &amp; Archives{% endblock %}
+{% block page_title %}SaaS Disaster Recovery &amp; Archive Management{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; flex-wrap:wrap;">
+  <a href="{% url 'backup_config' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-gear" style="color:#6366f1;"></i> Backup Settings
+  </a>
+  <a href="{% url 'backup_restore' %}" class="btn btn-secondary" style="font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+    <i class="fa-solid fa-rotate-left" style="color:#10b981;"></i> Restore Console
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1300px; margin:0 auto;">
+
+  <!-- Quick Trigger & Stats Grid -->
+  <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap:1.25rem; margin-bottom:1.5rem;">
+    <!-- Manual Run Panel -->
+    <div class="card-panel" style="padding:1.25rem; background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color:#fff; display:flex; flex-direction:column; justify-content:space-between;">
+      <div>
+        <div style="font-size:0.8rem; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:4px;">
+          On-Demand Backup (SaaS Super Admin)
+        </div>
+        <div style="font-size:1.15rem; font-weight:800; color:#f8fafc; margin-bottom:0.75rem;">
+          Trigger Immediate Backup
+        </div>
+      </div>
+      <form method="POST" action="{% url 'backup_run' %}" style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+        {% csrf_token %}
+        <select name="school_id" class="form-select" style="background:#334155; color:#fff; border-color:#475569; font-size:0.85rem; padding:0.4rem 0.75rem; flex:1; min-width:160px;">
+          {% for s in schools %}
+          <option value="{{ s.id }}" {% if selected_school_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <select name="backup_type" class="form-select" style="background:#334155; color:#fff; border-color:#475569; font-size:0.85rem; padding:0.4rem 0.75rem;">
+          <option value="Full">Full (DB + Media)</option>
+          <option value="Database_Only">DB Only</option>
+          <option value="Media_Only">Media Only</option>
+        </select>
+        <button type="submit" class="btn btn-primary" style="white-space:nowrap; padding:0.45rem 1.1rem; font-weight:700; background:#3b82f6; border-color:#3b82f6;">
+          <i class="fa-solid fa-circle-play"></i> Generate Now
+        </button>
+      </form>
+    </div>
+
+    <!-- Stat 1 -->
+    <div class="card-panel" style="padding:1.25rem; border-left:4px solid #3b82f6;">
+      <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase;">Total Backups</div>
+      <div style="font-size:1.75rem; font-weight:800; color:#0f172a; margin-top:4px;">{{ total_backups }}</div>
+      <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">Stored Archives</div>
+    </div>
+
+    <!-- Stat 2 -->
+    <div class="card-panel" style="padding:1.25rem; border-left:4px solid #10b981;">
+      <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase;">Verified Restorable</div>
+      <div style="font-size:1.75rem; font-weight:800; color:#059669; margin-top:4px;">{{ verified_backups }}</div>
+      <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">Integrity Tested</div>
+    </div>
+
+    <!-- Stat 3 -->
+    <div class="card-panel" style="padding:1.25rem; border-left:4px solid #8b5cf6;">
+      <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase;">Total Size</div>
+      <div style="font-size:1.75rem; font-weight:800; color:#6d28d9; margin-top:4px;">{{ total_size|floatformat:1 }} MB</div>
+      <div style="font-size:0.78rem; color:#64748b; margin-top:4px;">Encrypted Storage</div>
+    </div>
+  </div>
+
+  <!-- School Filter Bar -->
+  <div class="card-panel" style="padding:1rem 1.5rem; margin-bottom:1.5rem; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <i class="fa-solid fa-school" style="color:#2563eb; font-size:16px;"></i>
+      <span style="font-size:13px; font-weight:700; color:#334155;">Filter Archives by Tenant School:</span>
+    </div>
+    <form method="GET" style="display:flex; align-items:center; gap:10px;">
+      <select name="school_id" class="form-select" style="font-size:13px; min-width:260px;" onchange="this.form.submit()">
+        <option value="">All Schools (Global Archives)</option>
+        {% for s in schools %}
+        <option value="{{ s.id }}" {% if selected_school_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }} ({{ s.school_code }})</option>
+        {% endfor %}
+      </select>
+      {% if selected_school_id %}
+      <a href="{% url 'backup_history' %}" class="btn btn-secondary btn-sm" title="Clear Filter">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <!-- Backups Table -->
+  <div class="card-panel" style="overflow:hidden; padding:0;">
+    <div style="padding:1rem 1.25rem; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+      <h3 style="margin:0; font-size:1rem; font-weight:700; color:#1e293b;">
+        <i class="fa-solid fa-database" style="color:#3b82f6; margin-right:6px;"></i> Backup Archive Manifest
+      </h3>
+      {% if last_backup %}
+      <span style="font-size:0.8rem; color:#64748b;">
+        Latest backup created: <strong>{{ last_backup.created_at|date:"d M Y, H:i" }}</strong>
+      </span>
+      {% endif %}
+    </div>
+
+    <div class="table-responsive">
+      <table class="custom-table" style="margin:0;">
+        <thead>
+          <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0; text-align:left; font-size:0.82rem; color:#475569; text-transform:uppercase;">
+            <th style="padding:0.75rem 1rem;">Archive Name</th>
+            <th style="padding:0.75rem 1rem;">School / Tenant</th>
+            <th style="padding:0.75rem 1rem;">Type</th>
+            <th style="padding:0.75rem 1rem;">Size</th>
+            <th style="padding:0.75rem 1rem;">SHA-256 Checksum</th>
+            <th style="padding:0.75rem 1rem;">Security</th>
+            <th style="padding:0.75rem 1rem;">Verification</th>
+            <th style="padding:0.75rem 1rem;">Generated At</th>
+            <th style="padding:0.75rem 1rem; text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in backups %}
+          <tr style="border-bottom:1px solid #f1f5f9; font-size:0.88rem; transition:background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+            <td style="padding:0.85rem 1rem; font-weight:700; color:#1e293b;">
+              <i class="fa-solid fa-file-zipper" style="color:#f59e0b; margin-right:6px;"></i>
+              {{ b.backup_name }}
+            </td>
+            <td style="padding:0.85rem 1rem; font-size:0.82rem; color:#3b82f6; font-weight:700;">
+              {{ b.school.name }}
+            </td>
+            <td style="padding:0.85rem 1rem;">
+              <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:700; font-size:0.78rem;">
+                {{ b.get_backup_type_display }}
+              </span>
+            </td>
+            <td style="padding:0.85rem 1rem; font-weight:600; color:#334155;">
+              {{ b.file_size_mb }} MB
+            </td>
+            <td style="padding:0.85rem 1rem; font-family:monospace; font-size:0.78rem; color:#64748b;" title="{{ b.checksum_sha256 }}">
+              {{ b.checksum_sha256|slice:":16" }}...
+            </td>
+            <td style="padding:0.85rem 1rem;">
+              {% if b.is_encrypted %}
+                <span class="badge" style="background:#ecfdf5; color:#047857; font-weight:700; font-size:0.78rem;">
+                  <i class="fa-solid fa-lock"></i> Encrypted
+                </span>
+              {% else %}
+                <span class="badge" style="background:#f1f5f9; color:#64748b; font-weight:700; font-size:0.78rem;">Standard</span>
+              {% endif %}
+            </td>
+            <td style="padding:0.85rem 1rem;">
+              {% if b.is_verified %}
+                <span class="badge" style="background:#ecfdf5; color:#047857; font-weight:700; font-size:0.78rem;" title="{{ b.verification_notes }}">
+                  <i class="fa-solid fa-circle-check"></i> Verified
+                </span>
+              {% else %}
+                <span class="badge" style="background:#fffbeb; color:#b45309; font-weight:700; font-size:0.78rem;">
+                  <i class="fa-solid fa-clock"></i> Untested
+                </span>
+              {% endif %}
+            </td>
+            <td style="padding:0.85rem 1rem; color:#64748b; font-size:0.82rem;">
+              {{ b.created_at|date:"Y-m-d H:i" }}
+            </td>
+            <td style="padding:0.85rem 1rem; text-align:right;">
+              <a href="{% url 'backup_download' b.id %}" class="btn btn-sm btn-secondary" style="font-weight:700; font-size:0.78rem;" title="Download Archive">
+                <i class="fa-solid fa-download"></i> Download
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" style="text-align:center; padding:3rem; color:#64748b;">
+              <div style="font-size:2.5rem; margin-bottom:0.75rem; color:#cbd5e1;">
+                <i class="fa-solid fa-box-open"></i>
+              </div>
+              <h4 style="margin:0 0 4px 0; color:#334155; font-size:1.1rem; font-weight:700;">No Backup Archives Found</h4>
+              <p style="margin:0; font-size:0.85rem;">Use the panel above to generate your first on-demand system backup.</p>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

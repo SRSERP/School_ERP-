@@ -1,0 +1,389 @@
+{% extends 'school_erp/base.html' %}
+{% load static %}
+
+{% block title %}Fee Head Master - SRS School ERP{% endblock %}
+{% block page_title %}Fee Head Master{% endblock %}
+
+{% block header_actions %}
+<div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+  <button type="button" onclick="openAddHeadModal()" class="btn btn-primary btn-sm" style="background:#2563eb; border-color:#2563eb; font-weight:800; display:inline-flex; align-items:center; gap:6px; box-shadow:0 4px 12px rgba(37,99,235,0.25);">
+    <i class="fa-solid fa-plus-circle"></i> Add New Fee Head
+  </button>
+  <a href="{% url 'fee_structure' %}" class="btn btn-secondary btn-sm" style="font-weight:700;">
+    <i class="fa-solid fa-layer-group"></i> Fee Structures
+  </a>
+  <a href="{% url 'fee_counter' %}" class="btn btn-primary btn-sm" style="background:#059669; border-color:#059669; font-weight:700;">
+    <i class="fa-solid fa-cash-register"></i> Fee Counter
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1300px; margin:0 auto;">
+
+  <!-- Hero Header Banner -->
+  <div style="background:linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color:#fff; border-radius:14px; padding:1.4rem 1.8rem; margin-bottom:1.5rem; box-shadow:0 6px 20px rgba(15,23,42,0.15); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; border:1px solid rgba(255,255,255,0.08);">
+    <div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <span style="background:#f59e0b; color:#000; font-size:10px; font-weight:900; padding:2px 8px; border-radius:12px; text-transform:uppercase;">Master Setup</span>
+        <h3 style="color:#fff; font-size:1.3rem; margin:0; font-weight:800;">
+          <i class="fa-solid fa-tags" style="color:#f59e0b;"></i> Central Fee Head Master
+        </h3>
+      </div>
+      <p style="color:#94a3b8; font-size:0.875rem; margin:0; max-width:750px;">
+        Define and customize standard institution fee heads including Academic Tuition, Transport, Hostel, Examinations, Laboratory, Sports, Annual Development, Late Fines, and Caution Deposits.
+      </p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:10px; padding:8px 16px; text-align:center;">
+        <span style="font-size:0.75rem; color:#94a3b8; text-transform:uppercase; font-weight:700; display:block;">Active Heads</span>
+        <span style="font-size:1.25rem; font-weight:900; color:#38bdf8;">{{ stats.total }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Metric Badges Row -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:1.5rem;">
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #2563eb;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Total Fee Heads</div>
+      <div style="font-size:24px; font-weight:900; color:#0f172a;">{{ stats.total }}</div>
+      <div style="font-size:11px; color:#2563eb; font-weight:600; margin-top:2px;">Configured in Institution</div>
+    </div>
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #059669;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Academic & Exams</div>
+      <div style="font-size:24px; font-weight:900; color:#059669;">{{ stats.academic }}</div>
+      <div style="font-size:11px; color:#059669; font-weight:600; margin-top:2px;">Tuition, Reg & Exam Heads</div>
+    </div>
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #8b5cf6;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Facilities (Bus & Hostel)</div>
+      <div style="font-size:24px; font-weight:900; color:#8b5cf6;">{{ stats.transport_hostel }}</div>
+      <div style="font-size:11px; color:#8b5cf6; font-weight:600; margin-top:2px;">Transport, Hostel & Boarding</div>
+    </div>
+    <div class="card" style="background:#ffffff; border-radius:12px; padding:16px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); border-left:4px solid #f59e0b;">
+      <div style="font-size:11px; text-transform:uppercase; font-weight:800; color:#64748b; margin-bottom:4px;">Optional & Activities</div>
+      <div style="font-size:24px; font-weight:900; color:#f59e0b;">{{ stats.optional }}</div>
+      <div style="font-size:11px; color:#f59e0b; font-weight:600; margin-top:2px;">Labs, Sports & Student kits</div>
+    </div>
+  </div>
+
+  <!-- Filter & Search Toolbar -->
+  <div class="card" style="background:#ffffff; border-radius:12px; padding:14px 20px; box-shadow:0 2px 8px rgba(0,0,0,0.04); margin-bottom:1.5rem;">
+    <form method="GET" action="" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; font-weight:800; color:#475569; text-transform:uppercase;">Category:</span>
+        <a href="{% url 'fee_heads_master' %}" class="btn btn-sm {% if not selected_type %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">All ({{ stats.total }})</a>
+        <a href="{% url 'fee_heads_master' %}?type=Academic" class="btn btn-sm {% if selected_type == 'Academic' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Academic</a>
+        <a href="{% url 'fee_heads_master' %}?type=Transport" class="btn btn-sm {% if selected_type == 'Transport' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Transport</a>
+        <a href="{% url 'fee_heads_master' %}?type=Hostel" class="btn btn-sm {% if selected_type == 'Hostel' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Hostel</a>
+        <a href="{% url 'fee_heads_master' %}?type=Exam" class="btn btn-sm {% if selected_type == 'Exam' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Examinations</a>
+        <a href="{% url 'fee_heads_master' %}?type=Optional" class="btn btn-sm {% if selected_type == 'Optional' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Optional / Labs</a>
+        <a href="{% url 'fee_heads_master' %}?type=OneTime" class="btn btn-sm {% if selected_type == 'OneTime' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">One-Time</a>
+        <a href="{% url 'fee_heads_master' %}?type=Fine" class="btn btn-sm {% if selected_type == 'Fine' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Fine</a>
+        <a href="{% url 'fee_heads_master' %}?type=CautionDeposit" class="btn btn-sm {% if selected_type == 'CautionDeposit' %}btn-primary{% else %}btn-secondary{% endif %}" style="font-size:11.5px; border-radius:20px; font-weight:700;">Caution Deposit</a>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="text" name="search" value="{{ search }}" placeholder="Search head name or code..." class="form-input" style="font-size:12px; padding:6px 12px; width:220px; border-radius:8px;">
+        <button type="submit" class="btn btn-secondary btn-sm" style="font-weight:700;">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+        {% if search or selected_type %}
+        <a href="{% url 'fee_heads_master' %}" class="btn btn-secondary btn-sm" title="Clear Filters" style="color:#ef4444;">
+          <i class="fa-solid fa-xmark"></i>
+        </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+
+  <!-- Fee Heads Table -->
+  <div class="card" style="background:#ffffff; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,0.04); overflow:hidden;">
+    <div style="padding:14px 20px; background:#f8fafc; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+      <h4 style="margin:0; font-size:14px; font-weight:800; color:#0f172a;">
+        <i class="fa-solid fa-list-check" style="color:#2563eb;"></i> Configured Fee Heads ({{ heads|length }})
+      </h4>
+      <span style="font-size:11.5px; color:#64748b; font-weight:600;">
+        Used across Class Structures, Student Invoices & Fee Counter
+      </span>
+    </div>
+    
+    <div style="overflow-x:auto;">
+      <table class="custom-table" style="margin:0; font-size:12.5px; width:100%;">
+        <thead>
+          <tr style="background:#f1f5f9; color:#475569;">
+            <th style="width:50px; text-align:center;">#</th>
+            <th>Fee Head Name</th>
+            <th>Code</th>
+            <th>Category / Type</th>
+            <th style="text-align:center;">Billing Type</th>
+            <th style="text-align:center;">Optional?</th>
+            <th style="text-align:right;">Default Rate (₹)</th>
+            <th style="text-align:center;">Status</th>
+            <th style="text-align:center; min-width:140px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in heads %}
+          <tr style="border-bottom:1px solid #f1f5f9; {% if not h.is_active %}opacity:0.6; background:#fbfbfb;{% endif %}">
+            <td style="text-align:center; color:#94a3b8; font-weight:700;">{{ forloop.counter }}</td>
+            <td>
+              <div style="font-weight:800; color:#0f172a;">{{ h.name }}</div>
+              {% if h.description %}
+              <div style="font-size:11px; color:#64748b;">{{ h.description|truncatechars:60 }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <code style="background:#f1f5f9; color:#0f172a; padding:2px 6px; border-radius:4px; font-weight:800; font-size:11px;">
+                {{ h.code|default:"--" }}
+              </code>
+            </td>
+            <td>
+              {% if h.fee_type == 'Academic' %}
+              <span class="badge" style="background:#eff6ff; color:#2563eb; font-weight:700; border:1px solid #bfdbfe;">Academic</span>
+              {% elif h.fee_type == 'Transport' %}
+              <span class="badge" style="background:#f3e8ff; color:#7e22ce; font-weight:700; border:1px solid #ddd6fe;">Transport</span>
+              {% elif h.fee_type == 'Hostel' %}
+              <span class="badge" style="background:#fef3c7; color:#b45309; font-weight:700; border:1px solid #fde68a;">Hostel</span>
+              {% elif h.fee_type == 'Exam' %}
+              <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:700; border:1px solid #bae6fd;">Exam</span>
+              {% elif h.fee_type == 'Fine' %}
+              <span class="badge" style="background:#fee2e2; color:#b91c1c; font-weight:700; border:1px solid #fecaca;">Late Fine</span>
+              {% elif h.fee_type == 'CautionDeposit' %}
+              <span class="badge" style="background:#ecfdf5; color:#047857; font-weight:700; border:1px solid #a7f3d0;">Caution Deposit</span>
+              {% elif h.fee_type == 'OneTime' %}
+              <span class="badge" style="background:#f1f5f9; color:#475569; font-weight:700; border:1px solid #cbd5e1;">One-Time</span>
+              {% else %}
+              <span class="badge" style="background:#f8fafc; color:#64748b; font-weight:700; border:1px solid #e2e8f0;">{{ h.get_fee_type_display }}</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if h.is_recurring %}
+              <span style="display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:12px;">
+                <i class="fa-solid fa-arrows-rotate"></i> Recurring
+              </span>
+              {% else %}
+              <span style="display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:700; color:#64748b; background:#f1f5f9; padding:2px 8px; border-radius:12px;">
+                <i class="fa-solid fa-bolt"></i> One-Time
+              </span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              {% if h.is_optional %}
+              <span style="color:#d97706; font-size:11px; font-weight:700; background:#fef3c7; padding:2px 8px; border-radius:12px;">
+                <i class="fa-solid fa-circle-check"></i> Optional
+              </span>
+              {% else %}
+              <span style="color:#64748b; font-size:11px; font-weight:600;">Mandatory</span>
+              {% endif %}
+            </td>
+            <td style="text-align:right; font-weight:900; color:#0f172a; font-size:13px;">
+              ₹{{ h.default_amount|floatformat:2 }}
+            </td>
+            <td style="text-align:center;">
+              {% if h.is_active %}
+              <span style="color:#10b981; font-weight:800; font-size:11px; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-circle" style="font-size:7px;"></i> Active
+              </span>
+              {% else %}
+              <span style="color:#94a3b8; font-weight:700; font-size:11px; display:inline-flex; align-items:center; gap:4px;">
+                <i class="fa-solid fa-circle" style="font-size:7px;"></i> Inactive
+              </span>
+              {% endif %}
+            </td>
+            <td style="text-align:center;">
+              <div style="display:inline-flex; align-items:center; gap:6px;">
+                <button type="button" onclick="openEditHeadModal('{{ h.id }}', '{{ h.name|escapejs }}', '{{ h.code|escapejs }}', '{{ h.fee_type }}', '{{ h.default_amount }}', {{ h.is_recurring|yesno:'true,false' }}, {{ h.is_optional|yesno:'true,false' }}, {{ h.is_active|yesno:'true,false' }}, '{{ h.description|escapejs }}')" class="btn btn-secondary btn-sm" title="Edit Fee Head" style="padding:4px 8px; font-size:11px;">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <form method="POST" action="" style="display:inline;" onsubmit="return confirm('Toggle status for {{ h.name }}?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="toggle_status">
+                  <input type="hidden" name="head_id" value="{{ h.id }}">
+                  <button type="submit" class="btn btn-secondary btn-sm" title="Toggle Active / Inactive" style="padding:4px 8px; font-size:11px; color:{% if h.is_active %}#d97706{% else %}#059669{% endif %};">
+                    <i class="fa-solid {% if h.is_active %}fa-pause{% else %}fa-play{% endif %}"></i>
+                  </button>
+                </form>
+                <form method="POST" action="" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete Fee Head {{ h.name }}?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="delete_head">
+                  <input type="hidden" name="head_id" value="{{ h.id }}">
+                  <button type="submit" class="btn btn-secondary btn-sm" title="Delete Fee Head" style="padding:4px 8px; font-size:11px; color:#ef4444;">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="9" style="text-align:center; padding:40px; color:#94a3b8;">
+              <i class="fa-solid fa-tags" style="font-size:36px; margin-bottom:10px; color:#cbd5e1;"></i>
+              <p style="margin:0; font-size:14px; font-weight:700;">No Fee Heads found matching criteria.</p>
+              <button type="button" onclick="openAddHeadModal()" class="btn btn-primary btn-sm" style="margin-top:12px;">
+                <i class="fa-solid fa-plus"></i> Create First Fee Head
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal: Add New Fee Head -->
+<div id="addHeadModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(3px);">
+  <div style="background:#ffffff; border-radius:14px; width:92%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; animation:modalPop 0.2s ease-out;">
+    <div style="background:#1e293b; color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-plus-circle" style="color:#38bdf8;"></i> Add New Fee Head
+      </h3>
+      <button type="button" onclick="closeAddHeadModal()" style="background:transparent; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form method="POST" action="" style="padding:20px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_head">
+      
+      <div style="margin-bottom:14px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b;">Fee Head Name *</label>
+        <input type="text" name="name" class="form-input" placeholder="e.g. Tuition Fee, Transport Fee, Hostel Fee" required>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div>
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Head Code</label>
+          <input type="text" name="code" class="form-input" placeholder="e.g. TUITION, TRANS">
+        </div>
+        <div>
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Category / Type *</label>
+          <select name="fee_type" class="form-select">
+            {% for code, label in fee_types %}
+            <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b;">Default Amount (₹)</label>
+        <input type="number" step="0.01" name="default_amount" class="form-input" placeholder="0.00" value="0.00">
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#334155; cursor:pointer;">
+          <input type="checkbox" name="is_recurring" checked> Recurring (Monthly/Quarterly)
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#334155; cursor:pointer;">
+          <input type="checkbox" name="is_optional"> Optional Facility / Fee
+        </label>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b;">Description / Notes</label>
+        <textarea name="description" class="form-textarea" rows="2" placeholder="Fee Head remarks or instructions"></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:14px;">
+        <button type="button" onclick="closeAddHeadModal()" class="btn btn-secondary" style="font-weight:700;">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:800;">
+          <i class="fa-solid fa-check"></i> Save Fee Head
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal: Edit Fee Head -->
+<div id="editHeadModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; backdrop-filter:blur(3px);">
+  <div style="background:#ffffff; border-radius:14px; width:92%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden;">
+    <div style="background:#1e293b; color:#fff; padding:16px 20px; display:flex; justify-content:space-between; align-items:center;">
+      <h3 style="margin:0; font-size:15px; font-weight:800; display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-pen-to-square" style="color:#f59e0b;"></i> Edit Fee Head
+      </h3>
+      <button type="button" onclick="closeEditHeadModal()" style="background:transparent; border:none; color:#94a3b8; font-size:18px; cursor:pointer;">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <form method="POST" action="" style="padding:20px;">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit_head">
+      <input type="hidden" name="head_id" id="editHeadId">
+      
+      <div style="margin-bottom:14px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b;">Fee Head Name *</label>
+        <input type="text" name="name" id="editHeadName" class="form-input" required>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px;">
+        <div>
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Head Code</label>
+          <input type="text" name="code" id="editHeadCode" class="form-input">
+        </div>
+        <div>
+          <label class="form-label" style="font-weight:700; color:#1e293b;">Category / Type *</label>
+          <select name="fee_type" id="editHeadType" class="form-select">
+            {% for code, label in fee_types %}
+            <option value="{{ code }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b;">Default Amount (₹)</label>
+        <input type="number" step="0.01" name="default_amount" id="editHeadAmount" class="form-input">
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:14px; background:#f8fafc; padding:12px; border-radius:8px; border:1px solid #e2e8f0;">
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#334155; cursor:pointer;">
+          <input type="checkbox" name="is_recurring" id="editHeadRecurring"> Recurring
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; color:#334155; cursor:pointer;">
+          <input type="checkbox" name="is_optional" id="editHeadOptional"> Optional
+        </label>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label class="form-label" style="font-weight:700; color:#1e293b;">Description / Notes</label>
+        <textarea name="description" id="editHeadDesc" class="form-textarea" rows="2"></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #e2e8f0; padding-top:14px;">
+        <button type="button" onclick="closeEditHeadModal()" class="btn btn-secondary" style="font-weight:700;">Cancel</button>
+        <button type="submit" class="btn btn-primary" style="background:#2563eb; font-weight:800;">
+          <i class="fa-solid fa-floppy-disk"></i> Update Head
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openAddHeadModal() {
+  document.getElementById('addHeadModal').style.display = 'flex';
+}
+function closeAddHeadModal() {
+  document.getElementById('addHeadModal').style.display = 'none';
+}
+function openEditHeadModal(id, name, code, fee_type, amount, is_rec, is_opt, is_act, desc) {
+  document.getElementById('editHeadId').value = id;
+  document.getElementById('editHeadName').value = name;
+  document.getElementById('editHeadCode').value = code;
+  document.getElementById('editHeadType').value = fee_type;
+  document.getElementById('editHeadAmount').value = amount;
+  document.getElementById('editHeadRecurring').checked = is_rec;
+  document.getElementById('editHeadOptional').checked = is_opt;
+  document.getElementById('editHeadDesc').value = desc;
+  document.getElementById('editHeadModal').style.display = 'flex';
+}
+function closeEditHeadModal() {
+  document.getElementById('editHeadModal').style.display = 'none';
+}
+window.onclick = function(event) {
+  if (event.target == document.getElementById('addHeadModal')) closeAddHeadModal();
+  if (event.target == document.getElementById('editHeadModal')) closeEditHeadModal();
+}
+</script>
+{% endblock %}

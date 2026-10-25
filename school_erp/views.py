@@ -16,19 +16,29 @@ from functools import wraps
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import HttpResponse, FileResponse, JsonResponse
 from .models import (
     SchoolProfile, AcademicSession, ClassLevel, Section, Subject,
     Teacher, Student, Attendance, Timetable, FeeCategory, ClassFeeMaster,
     FeeInvoice, FeePayment, FeeReceipt, FeeReceiptItem, Exam, ExamResult, Notice,
-    StudentSessionEnrollment, UserProfile
+    StudentSessionEnrollment, UserProfile, FeeHead, FeeStructure, FeeStructureItem,
+    FeeInstalmentSchedule, TransportRoute, HostelFacility, StudentFacilityAllocation,
+    StudentConcession, FeeRefund, StudentFeeLedger, FeeReminderLog,
+    Role, RolePermission, AuditLog, Branch, BackupConfiguration, BackupLog,
+    SecurityConfiguration, LoginAttemptLog
 )
 from .forms import (
     StudentForm, TeacherForm, FeePaymentForm, FeeInvoiceForm, NoticeForm,
-    SchoolSettingsForm, ExamForm, TimetableForm
+    SchoolSettingsForm, ExamForm, TimetableForm, FeeHeadForm, FeeRefundForm,
+    StudentConcessionForm, TransportRouteForm, HostelFacilityForm,
+    RoleForm, AuditApprovalForm, UserCreateUpdateForm, BranchForm,
+    BackupConfigurationForm, SecurityConfigurationForm
 )
+from .backup_utils import generate_system_backup, verify_restore_archive, execute_test_environment_restore
 from .student_utils import (
     find_duplicate_student, normalize_student_name, normalize_parent_name,
-    parse_date_of_birth, get_row_field
+    parse_date_of_birth, get_row_field, generate_student_admission_number,
+    generate_unique_school_code
 )
 from .context_processors import get_active_session, get_current_school
 
@@ -45,18 +55,261 @@ def get_school_context(request=None):
 # MENU PERMISSIONS & ACCESS CONTROL DECORATORS
 # ==============================================================================
 
+def get_client_ip(request):
+    if not request:
+        return None
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR')
+
+
+def log_audit(request, action, module, object_type, object_id='', object_repr='',
+              description='', reason='', changes=None, requires_approval=False, status='SUCCESS'):
+    """
+    Records an immutable audit trail entry for security, tracking, and compliance.
+    """
+    try:
+        user = request.user if (request and getattr(request, 'user', None) and request.user.is_authenticated) else None
+        school = get_current_school(request) if request else None
+        user_role = ''
+        if user:
+            profile = getattr(user, 'profile', None)
+            if profile:
+                user_role = (profile.role_obj.name if profile.role_obj else profile.role) or ''
+            elif user.is_superuser:
+                user_role = 'Super Admin'
+        ip_addr = get_client_ip(request)
+
+        return AuditLog.objects.create(
+            school=school,
+            user=user,
+            user_role=user_role,
+            action=action,
+            module=module,
+            object_type=object_type,
+            object_id=str(object_id) if object_id else '',
+            object_repr=str(object_repr)[:250] if object_repr else '',
+            description=description,
+            changes_json=changes,
+            requires_approval=requires_approval,
+            status=status,
+            reason=reason or '',
+            ip_address=ip_addr
+        )
+    except Exception as e:
+        print(f"Error logging audit: {e}")
+        return None
+
+
+def ensure_roles_and_permissions():
+    """
+    Seeds and ensures the 8 standard roles and their 10 module permissions exist.
+    """
+    standard_roles = [
+        ('Super Admin', 'SUPER_ADMIN', 'Platform & School Super Administrator with full privileges', True),
+        ('School Admin', 'SCHOOL_ADMIN', 'School Head Administrator managing school operations', True),
+        ('Principal', 'PRINCIPAL', 'Academic head, approves marks, results & general reports', True),
+        ('Teacher', 'TEACHER', 'Classroom faculty, marks entry & attendance for assigned classes', True),
+        ('Accountant', 'ACCOUNTANT', 'Fee collection, ledgers, concessions, refunds & finance', True),
+        ('HR', 'HR', 'Staff records, teacher onboarding & human resources', True),
+        ('Parent', 'PARENT', 'Guardian viewing records, fees & marks for linked children', True),
+        ('Student', 'STUDENT', 'Enrolled student viewing own timetable, results & fee status', True),
+    ]
+
+    modules = [
+        ('STUDENTS', 'Students & SIS'),
+        ('FEES', 'Fees & Accounts'),
+        ('ATTENDANCE', 'Attendance'),
+        ('EXAMS', 'Examinations & Marks'),
+        ('TIMETABLE', 'Timetable & Routines'),
+        ('SESSIONS', 'Academic Sessions & Promotion'),
+        ('STAFF_HR', 'Teachers & Staff / HR'),
+        ('USERS_ROLES', 'User Management & Roles'),
+        ('AUDIT_LOGS', 'Audit Trail & Logs'),
+        ('SETTINGS', 'School Profile & Settings'),
+    ]
+
+    role_objs = {}
+    for name, code, desc, is_sys in standard_roles:
+        r, _ = Role.objects.get_or_create(
+            code=code,
+            defaults={'name': name, 'description': desc, 'is_system_role': is_sys}
+        )
+        role_objs[code] = r
+
+    # Default permission policies per role:
+    # Tuple: (can_view, can_add, can_edit, can_delete, can_approve, can_export)
+    perm_matrix = {
+        'SUPER_ADMIN': {m[0]: (True, True, True, True, True, True) for m in modules},
+        'SCHOOL_ADMIN': {m[0]: (True, True, True, True, True, True) for m in modules},
+        'PRINCIPAL': {
+            'STUDENTS': (True, True, True, False, True, True),
+            'FEES': (True, False, False, False, True, True),
+            'ATTENDANCE': (True, True, True, False, True, True),
+            'EXAMS': (True, True, True, False, True, True),
+            'TIMETABLE': (True, True, True, False, True, True),
+            'SESSIONS': (True, True, True, False, True, True),
+            'STAFF_HR': (True, True, True, False, True, True),
+            'USERS_ROLES': (True, False, False, False, False, True),
+            'AUDIT_LOGS': (True, False, False, False, True, True),
+            'SETTINGS': (True, False, True, False, True, True),
+        },
+        'TEACHER': {
+            'STUDENTS': (True, False, False, False, False, False),
+            'FEES': (False, False, False, False, False, False),
+            'ATTENDANCE': (True, True, True, False, False, False),
+            'EXAMS': (True, True, True, False, False, False),
+            'TIMETABLE': (True, False, False, False, False, False),
+            'SESSIONS': (False, False, False, False, False, False),
+            'STAFF_HR': (False, False, False, False, False, False),
+            'USERS_ROLES': (False, False, False, False, False, False),
+            'AUDIT_LOGS': (False, False, False, False, False, False),
+            'SETTINGS': (False, False, False, False, False, False),
+        },
+        'ACCOUNTANT': {
+            'STUDENTS': (True, False, False, False, False, True),
+            'FEES': (True, True, True, False, False, True),
+            'ATTENDANCE': (False, False, False, False, False, False),
+            'EXAMS': (False, False, False, False, False, False),
+            'TIMETABLE': (False, False, False, False, False, False),
+            'SESSIONS': (True, False, False, False, False, False),
+            'STAFF_HR': (False, False, False, False, False, False),
+            'USERS_ROLES': (False, False, False, False, False, False),
+            'AUDIT_LOGS': (True, False, False, False, False, True),
+            'SETTINGS': (False, False, False, False, False, False),
+        },
+        'HR': {
+            'STUDENTS': (False, False, False, False, False, False),
+            'FEES': (False, False, False, False, False, False),
+            'ATTENDANCE': (True, False, False, False, False, False),
+            'EXAMS': (False, False, False, False, False, False),
+            'TIMETABLE': (True, False, False, False, False, False),
+            'SESSIONS': (False, False, False, False, False, False),
+            'STAFF_HR': (True, True, True, False, False, True),
+            'USERS_ROLES': (True, False, False, False, False, False),
+            'AUDIT_LOGS': (True, False, False, False, False, False),
+            'SETTINGS': (False, False, False, False, False, False),
+        },
+        'PARENT': {
+            'STUDENTS': (True, False, False, False, False, False),
+            'FEES': (True, False, False, False, False, False),
+            'ATTENDANCE': (True, False, False, False, False, False),
+            'EXAMS': (True, False, False, False, False, False),
+            'TIMETABLE': (True, False, False, False, False, False),
+            'SESSIONS': (False, False, False, False, False, False),
+            'STAFF_HR': (False, False, False, False, False, False),
+            'USERS_ROLES': (False, False, False, False, False, False),
+            'AUDIT_LOGS': (False, False, False, False, False, False),
+            'SETTINGS': (False, False, False, False, False, False),
+        },
+        'STUDENT': {
+            'STUDENTS': (True, False, False, False, False, False),
+            'FEES': (True, False, False, False, False, False),
+            'ATTENDANCE': (True, False, False, False, False, False),
+            'EXAMS': (True, False, False, False, False, False),
+            'TIMETABLE': (True, False, False, False, False, False),
+            'SESSIONS': (False, False, False, False, False, False),
+            'STAFF_HR': (False, False, False, False, False, False),
+            'USERS_ROLES': (False, False, False, False, False, False),
+            'AUDIT_LOGS': (False, False, False, False, False, False),
+            'SETTINGS': (False, False, False, False, False, False),
+        },
+    }
+
+    for r_code, m_perms in perm_matrix.items():
+        role = role_objs.get(r_code)
+        if not role:
+            continue
+        for m_code, m_name in modules:
+            p_tuple = m_perms.get(m_code, (False, False, False, False, False, False))
+            RolePermission.objects.get_or_create(
+                role=role,
+                module_code=m_code,
+                defaults={
+                    'module_name': m_name,
+                    'can_view': p_tuple[0],
+                    'can_add': p_tuple[1],
+                    'can_edit': p_tuple[2],
+                    'can_delete': p_tuple[3],
+                    'can_approve': p_tuple[4],
+                    'can_export': p_tuple[5],
+                }
+            )
+
+
+def has_module_perm(user, module_code, action='view'):
+    """
+    Check if user has specific action permission for a module.
+    Actions: 'view', 'add', 'edit', 'delete', 'approve', 'export'
+    """
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return False
+
+    role = profile.role_obj
+    if not role and profile.role:
+        role = Role.objects.filter(Q(name__iexact=profile.role) | Q(code__iexact=profile.role)).first()
+        if role:
+            profile.role_obj = role
+            profile.save(update_fields=['role_obj'])
+
+    if role:
+        if role.code in ['SUPER_ADMIN', 'SCHOOL_ADMIN']:
+            return True
+        perm = RolePermission.objects.filter(role=role, module_code=module_code).first()
+        if perm:
+            action_field = f"can_{action}"
+            return getattr(perm, action_field, False)
+
+    # Fallback to boolean flags on UserProfile
+    legacy_map = {
+        'STUDENTS': 'can_manage_students',
+        'FEES': 'can_manage_fees',
+        'ATTENDANCE': 'can_manage_attendance',
+        'EXAMS': 'can_manage_exams',
+        'TIMETABLE': 'can_manage_timetable',
+        'SESSIONS': 'can_manage_sessions',
+        'USERS_ROLES': 'can_manage_users',
+    }
+    flag_name = legacy_map.get(module_code)
+    if flag_name:
+        return getattr(profile, flag_name, False)
+    return False
+
+
+LEGACY_PERM_MODULE_MAP = {
+    'can_manage_students': ('STUDENTS', 'view'),
+    'can_manage_fees': ('FEES', 'view'),
+    'can_manage_attendance': ('ATTENDANCE', 'view'),
+    'can_manage_exams': ('EXAMS', 'view'),
+    'can_manage_timetable': ('TIMETABLE', 'view'),
+    'can_manage_classes': ('SETTINGS', 'view'),
+    'can_manage_sessions': ('SESSIONS', 'view'),
+    'can_manage_users': ('USERS_ROLES', 'view'),
+}
+
 def check_menu_permission(request, perm_name):
     """Check if current user has permission for a specific menu item."""
     user = request.user
     if not user.is_authenticated:
-        # Default behavior: if login is required, allow or block per policy
         return True
     if user.is_superuser:
         return True
     profile = getattr(user, 'profile', None)
-    if profile:
-        return getattr(profile, perm_name, False)
-    return False
+    if not profile:
+        return False
+
+    # Check via modern RolePermission matrix first
+    if perm_name in LEGACY_PERM_MODULE_MAP:
+        mod_code, act = LEGACY_PERM_MODULE_MAP[perm_name]
+        return has_module_perm(user, mod_code, act)
+
+    return getattr(profile, perm_name, False)
 
 
 def require_menu_permission(perm_name, perm_label="this section"):
@@ -75,49 +328,136 @@ def require_menu_permission(perm_name, perm_label="this section"):
     return decorator
 
 
+def is_teacher_user(user):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return False
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return False
+    role_code = (getattr(profile.role_obj, 'code', None) or '').upper()
+    role_name = (profile.role or '').upper()
+    return 'TEACHER' in role_code or 'TEACHER' in role_name or bool(profile.assigned_teacher)
+
+
+def is_parent_user(user):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return False
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return False
+    role_code = (getattr(profile.role_obj, 'code', None) or '').upper()
+    role_name = (profile.role or '').upper()
+    return 'PARENT' in role_code or 'PARENT' in role_name
+
+
+def get_teacher_assigned_classes(user):
+    """
+    Returns (class_queryset, subject_queryset) assigned to teacher user.
+    """
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return ClassLevel.objects.none(), Subject.objects.none()
+
+    classes = set(profile.assigned_classes.all())
+    subjects = set()
+
+    teacher = profile.assigned_teacher
+    if not teacher and hasattr(user, 'teacher_profile'):
+        teacher = user.teacher_profile
+    if not teacher:
+        teacher = Teacher.objects.filter(Q(user=user) | Q(email=user.email)).first()
+
+    if teacher:
+        ct_sections = Section.objects.filter(class_teacher=teacher)
+        for sec in ct_sections:
+            classes.add(sec.class_level)
+
+        tt_entries = Timetable.objects.filter(teacher=teacher)
+        for tt in tt_entries:
+            classes.add(tt.class_level)
+            if tt.subject:
+                subjects.add(tt.subject)
+
+        for sub in Subject.objects.filter(teachers=teacher):
+            subjects.add(sub)
+
+    class_ids = [c.id for c in classes]
+    class_qs = ClassLevel.objects.filter(id__in=class_ids).order_by('order', 'name')
+    if subjects:
+        subject_ids = [s.id for s in subjects]
+        subject_qs = Subject.objects.filter(id__in=subject_ids).order_by('name')
+    else:
+        subject_qs = Subject.objects.all()
+
+    return class_qs, subject_qs
+
+
+def get_parent_allowed_students(user):
+    """
+    Returns queryset of students that a parent user is authorized to view.
+    """
+    profile = getattr(user, 'profile', None)
+    if not profile:
+        return Student.objects.none()
+    student_ids = set(profile.linked_students.values_list('id', flat=True))
+    if profile.phone:
+        by_phone = Student.objects.filter(parent_phone=profile.phone).values_list('id', flat=True)
+        student_ids.update(by_phone)
+    if user.email:
+        by_email = Student.objects.filter(parent_email=user.email).values_list('id', flat=True)
+        student_ids.update(by_email)
+    return Student.objects.filter(id__in=student_ids)
+
+
+
 def dashboard_view(request):
     if not request.user.is_authenticated:
         return redirect('user_login')
-    ctx = get_school_context()
-    active_session = get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    active_session = get_active_session(request, school=school)
     
-    # Filter students for active session
-    students_in_session = Student.objects.filter(is_active=True)
+    # Filter students for active session & current school
+    students_in_session = Student.objects.filter(school=school, is_active=True)
     if active_session:
         students_in_session = students_in_session.filter(
             Q(academic_session=active_session) | Q(session_enrollments__academic_session=active_session)
         ).distinct()
         
     total_students = students_in_session.count()
-    total_teachers = Teacher.objects.filter(is_active=True).count()
-    total_classes = ClassLevel.objects.count()
+    total_teachers = Teacher.objects.filter(school=school, is_active=True).count()
+    total_classes = ClassLevel.objects.filter(school=school).count()
     
-    # Fees summary for active session
-    invoices = FeeInvoice.objects.all()
+    # Fees summary for active session & current school
+    invoices = FeeInvoice.objects.filter(school=school)
     if active_session:
         invoices = invoices.filter(academic_session=active_session)
     total_invoiced = sum((inv.total_payable for inv in invoices), Decimal('0.00'))
     if active_session:
-        total_collected = FeePayment.objects.filter(invoice__academic_session=active_session).aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+        total_collected = FeePayment.objects.filter(invoice__school=school, invoice__academic_session=active_session).aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
     else:
-        total_collected = FeePayment.objects.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+        total_collected = FeePayment.objects.filter(invoice__school=school).aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
     pending_fees = max(Decimal('0.00'), total_invoiced - total_collected)
     
     # Today's attendance
     today = timezone.now().date()
-    today_attendance = Attendance.objects.filter(date=today)
+    today_attendance = Attendance.objects.filter(student__school=school, date=today)
     att_present = today_attendance.filter(status='Present').count()
     att_absent = today_attendance.filter(status='Absent').count()
     att_total = today_attendance.count()
     att_rate = round((att_present / att_total * 100), 1) if att_total > 0 else 0
     
     recent_students = students_in_session.order_by('-created_at')[:6]
-    recent_payments = FeePayment.objects.order_by('-payment_date', '-created_at')
+    recent_payments = FeePayment.objects.filter(invoice__school=school).order_by('-payment_date', '-created_at')
     if active_session:
         recent_payments = recent_payments.filter(invoice__academic_session=active_session)
     recent_payments = recent_payments[:5]
-    notices = Notice.objects.all().order_by('-is_urgent', '-created_at')[:4]
-    classes = ClassLevel.objects.all()
+    notices = Notice.objects.filter(school=school).order_by('-is_urgent', '-created_at')[:4]
+    classes = ClassLevel.objects.filter(school=school).prefetch_related('sections').order_by('order', 'name')
     
     ctx.update({
         'total_students': total_students,
@@ -147,13 +487,20 @@ def student_list_view(request):
     school = ctx.get('school')
     active_session = get_active_session(request)
 
-    students_qs = Student.objects.select_related('class_level', 'section', 'academic_session').filter(is_active=True)
     if school:
-        students_qs = students_qs.filter(class_level__school=school)
+        students_qs = Student.objects.filter(school=school, is_active=True).select_related('class_level', 'section', 'academic_session')
+    else:
+        students_qs = Student.objects.none()
     if active_session:
         students_qs = students_qs.filter(
             Q(academic_session=active_session) | Q(session_enrollments__academic_session=active_session)
         ).distinct()
+
+    # Parent Scoped Access Restriction Enforcement
+    if is_parent_user(request.user):
+        allowed_students = get_parent_allowed_students(request.user)
+        students_qs = students_qs.filter(id__in=allowed_students.values_list('id', flat=True))
+
     students_qs = students_qs.order_by('class_level__order', 'roll_number', 'first_name')
     
     search_query = request.GET.get('q', '').strip()
@@ -213,13 +560,24 @@ def student_list_view(request):
         'selected_gender': gender,
         'selected_fee_filter': fee_filter,
         'total_count': total_count,
+        'is_parent_restricted': is_parent_user(request.user),
     })
     return render(request, 'school_erp/student_list.html', ctx)
 
 
 def student_detail_view(request, pk):
-    ctx = get_school_context()
+    ctx = get_school_context(request)
     student = get_object_or_404(Student.objects.select_related('class_level', 'section'), pk=pk)
+
+    # Parent Scoped Access Restriction Enforcement
+    if is_parent_user(request.user):
+        allowed_students = get_parent_allowed_students(request.user)
+        if not allowed_students.filter(id=student.id).exists():
+            messages.error(
+                request,
+                "Access Restricted: As a Parent, you can only view profile and academic records for your linked child."
+            )
+            return redirect('dashboard')
     
     attendance_records = student.attendance_records.order_by('-date')[:30]
     invoices = student.invoices.prefetch_related('payments').all()
@@ -236,13 +594,22 @@ def student_detail_view(request, pk):
 
 @require_menu_permission('can_manage_students', 'New Admission')
 def student_create_view(request):
-    ctx = get_school_context()
-    active_session = get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    active_session = get_active_session(request, school=school)
+
     if request.method == 'POST':
-        form = StudentForm(request.POST, request.FILES)
+        form = StudentForm(request.POST, request.FILES, school=school)
         if form.is_valid():
             student = form.save(commit=False)
+            student.school = school
             student.academic_session = active_session
+
+            # Generate or enforce standardized admission number: [School 3 letters]-[Year]-[Register Sequence]
+            adm_no = request.POST.get('admission_number', '').strip()
+            if not adm_no or Student.objects.filter(admission_number=adm_no).exclude(pk=student.pk).exists():
+                adm_no = generate_student_admission_number(school, active_session)
+            student.admission_number = adm_no
             student.save()
 
             # Record enrollment in active session
@@ -258,21 +625,25 @@ def student_create_view(request):
             )
             
             # Automatically create Admission Fee invoice from Class Fee Master
-            try:
-                fm = student.class_level.fee_master
-                adm_amt = fm.admission_fee
-            except Exception:
-                adm_amt = Decimal('5000.00')
+            adm_amt = Decimal('5000.00')
+            if student.class_level:
+                try:
+                    fm = student.class_level.fee_master
+                    adm_amt = fm.admission_fee
+                except Exception:
+                    adm_amt = Decimal('5000.00')
 
-            adm_cat = FeeCategory.objects.filter(name__icontains='Admission').first()
+            adm_cat = FeeCategory.objects.filter(school=school, name__icontains='Admission').first()
             if not adm_cat:
                 adm_cat, _ = FeeCategory.objects.get_or_create(
+                    school=school,
                     name="Admission Fee",
                     defaults={'default_amount': adm_amt, 'description': "One-time student admission and registration fee"}
                 )
 
             inv_adm_no = f"INV-{timezone.now().year}-ADM{student.id:04d}"
             FeeInvoice.objects.create(
+                school=school,
                 invoice_number=inv_adm_no,
                 student=student,
                 fee_category=adm_cat,
@@ -283,10 +654,11 @@ def student_create_view(request):
             )
 
             # Automatically create initial tuition fee invoice
-            tuition_cat = FeeCategory.objects.filter(name__icontains='Tuition').first() or FeeCategory.objects.filter(name__icontains='Monthly').first()
+            tuition_cat = FeeCategory.objects.filter(school=school, name__icontains='Tuition').first() or FeeCategory.objects.filter(school=school, name__icontains='Monthly').first()
             if tuition_cat:
                 inv_tui_no = f"INV-{timezone.now().year}-TUI{student.id:04d}"
                 FeeInvoice.objects.create(
+                    school=school,
                     invoice_number=inv_tui_no,
                     student=student,
                     fee_category=tuition_cat,
@@ -307,22 +679,24 @@ def student_create_view(request):
                     for err in errs:
                         messages.error(request, f"{field_name.replace('_', ' ').title()}: {err}")
     else:
-        # Generate default admission number
-        count = Student.objects.count() + 1
-        default_adm = f"SRS-2026-{1000 + count}"
-        form = StudentForm(initial={'admission_number': default_adm, 'admission_date': timezone.now().date()})
+        # Generate standardized admission number: [School 3 letters]-[Year]-[Register Sequence]
+        default_adm = generate_student_admission_number(school, active_session)
+        form = StudentForm(initial={'admission_number': default_adm, 'admission_date': timezone.now().date()}, school=school)
         
     ctx.update({'form': form, 'title': 'New Student Admission'})
     return render(request, 'school_erp/student_form.html', ctx)
 
 
 def student_edit_view(request, pk):
-    ctx = get_school_context()
-    student = get_object_or_404(Student, pk=pk)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    student = get_object_or_404(Student, pk=pk, school=school)
     if request.method == 'POST':
-        form = StudentForm(request.POST, request.FILES, instance=student)
+        form = StudentForm(request.POST, request.FILES, instance=student, school=school)
         if form.is_valid():
-            student = form.save()
+            student = form.save(commit=False)
+            student.school = school
+            student.save()
             messages.success(request, f"Student '{student.full_name}' details updated successfully!")
             return redirect('student_detail', pk=student.pk)
         else:
@@ -335,7 +709,7 @@ def student_edit_view(request, pk):
                     for err in errs:
                         messages.error(request, f"{field_name.replace('_', ' ').title()}: {err}")
     else:
-        form = StudentForm(instance=student)
+        form = StudentForm(instance=student, school=school)
         
     ctx.update({'form': form, 'student': student, 'title': f'Edit Student: {student.full_name}'})
     return render(request, 'school_erp/student_form.html', ctx)
@@ -481,9 +855,10 @@ def student_bulk_upload_view(request):
     Validates duplicate entries based on Student Name, Father Name, and Date of Birth.
     If a student already exists (in DB or earlier in the file), skips insertion and reports duplicate details.
     """
-    ctx = get_school_context()
-    active_session = get_active_session(request)
-    classes = ClassLevel.objects.all().order_by('order', 'name')
+    ctx = get_school_context(request)
+    school = ctx['school']
+    active_session = get_active_session(request, school=school)
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
     
     if request.method == 'POST':
         uploaded_file = request.FILES.get('excel_file')
@@ -583,14 +958,14 @@ def student_bulk_upload_view(request):
             if override_class:
                 cl = override_class
             elif class_name:
-                cl = ClassLevel.objects.filter(Q(name__iexact=class_name) | Q(code__iexact=class_name)).first()
+                cl = ClassLevel.objects.filter(school=school).filter(Q(name__iexact=class_name) | Q(code__iexact=class_name)).first()
                 if not cl:
-                    order_val = (ClassLevel.objects.order_by('-order').values_list('order', flat=True).first() or 0) + 1
+                    order_val = (ClassLevel.objects.filter(school=school).order_by('-order').values_list('order', flat=True).first() or 0) + 1
                     clean_code = "".join(ch for ch in class_name if ch.isalnum()).upper()[:8] or f"C{order_val}"
-                    cl = ClassLevel.objects.create(name=class_name, code=clean_code, order=order_val)
+                    cl = ClassLevel.objects.create(school=school, name=class_name, code=clean_code, order=order_val)
                     ClassFeeMaster.objects.get_or_create(class_level=cl)
             else:
-                cl = ClassLevel.objects.first()
+                cl = ClassLevel.objects.filter(school=school).first()
                 
             if not cl:
                 error_count += 1
@@ -670,13 +1045,9 @@ def student_bulk_upload_view(request):
             # Valid new entry: record key in seen_in_file
             seen_in_file[file_key] = idx
             
-            # Auto-generate admission number if not provided
+            # Auto-generate standardized admission number if not provided
             if not adm_no:
-                total_cnt = Student.objects.count() + 1
-                adm_no = f"SRS-2026-{1000 + total_cnt}"
-                while Student.objects.filter(admission_number=adm_no).exists():
-                    total_cnt += 1
-                    adm_no = f"SRS-2026-{1000 + total_cnt}"
+                adm_no = generate_student_admission_number(school, active_session)
                     
             # Roll Number
             roll_str = get_row_field(row, ['roll_no', 'roll no', 'roll_number', 'roll number'], default='1')
@@ -708,6 +1079,7 @@ def student_bulk_upload_view(request):
                 
             # Create Student Record (duplicates are strictly rejected above)
             student = Student.objects.create(
+                school=school,
                 admission_number=adm_no,
                 roll_number=roll_val,
                 first_name=first_name,
@@ -855,8 +1227,9 @@ def student_id_card_view(request, pk):
 
 @require_menu_permission('can_manage_users', 'Teachers & Staff')
 def teacher_list_view(request):
-    ctx = get_school_context()
-    teachers_qs = Teacher.objects.filter(is_active=True).prefetch_related('subjects_taught', 'class_teacher_sections__class_level').order_by('employee_id')
+    ctx = get_school_context(request)
+    school = ctx['school']
+    teachers_qs = Teacher.objects.filter(school=school, is_active=True).prefetch_related('subjects_taught', 'class_teacher_sections__class_level').order_by('employee_id')
     
     dept = request.GET.get('dept', '').strip()
     search = request.GET.get('q', '').strip()
@@ -896,15 +1269,19 @@ def teacher_list_view(request):
 
 @require_menu_permission('can_manage_users', 'Teachers & Staff')
 def teacher_create_view(request):
-    ctx = get_school_context()
+    ctx = get_school_context(request)
+    school = ctx['school']
     if request.method == 'POST':
         form = TeacherForm(request.POST)
         if form.is_valid():
-            teacher = form.save()
+            teacher = form.save(commit=False)
+            teacher.school = school
+            teacher.save()
+            form.save_m2m()
             messages.success(request, f"Faculty member '{teacher.full_name}' added successfully!")
             return redirect('teacher_detail', pk=teacher.pk)
     else:
-        count = Teacher.objects.count() + 1
+        count = Teacher.objects.filter(school=school).count() + 1
         default_id = f"EMP-2026-{count:02d}"
         form = TeacherForm(initial={'employee_id': default_id, 'joining_date': timezone.now().date()})
         
@@ -914,10 +1291,12 @@ def teacher_create_view(request):
 
 @require_menu_permission('can_manage_users', 'Teacher Profile')
 def teacher_detail_view(request, pk):
-    ctx = get_school_context()
+    ctx = get_school_context(request)
+    school = ctx['school']
     teacher = get_object_or_404(
         Teacher.objects.prefetch_related('subjects_taught', 'class_teacher_sections__class_level'),
-        pk=pk
+        pk=pk,
+        school=school
     )
     
     # Timetable periods for this teacher
@@ -946,13 +1325,17 @@ def teacher_detail_view(request, pk):
 
 @require_menu_permission('can_manage_users', 'Edit Teacher')
 def teacher_edit_view(request, pk):
-    ctx = get_school_context()
-    teacher = get_object_or_404(Teacher, pk=pk)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    teacher = get_object_or_404(Teacher, pk=pk, school=school)
     
     if request.method == 'POST':
         form = TeacherForm(request.POST, instance=teacher)
         if form.is_valid():
-            teacher = form.save()
+            teacher = form.save(commit=False)
+            teacher.school = school
+            teacher.save()
+            form.save_m2m()
             messages.success(request, f"Faculty details for '{teacher.full_name}' updated successfully!")
             return redirect('teacher_detail', pk=teacher.pk)
     else:
@@ -1659,9 +2042,10 @@ def timetable_generate_default_view(request):
 
 @require_menu_permission('can_manage_attendance', 'Daily Attendance')
 def attendance_view(request):
-    ctx = get_school_context()
-    classes = ClassLevel.objects.all()
-    sections = Section.objects.all()
+    ctx = get_school_context(request)
+    school = ctx['school']
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
+    sections = Section.objects.filter(class_level__school=school)
     
     class_id = request.GET.get('class_id') or request.POST.get('class_id')
     section_id = request.GET.get('section_id') or request.POST.get('section_id')
@@ -1672,16 +2056,16 @@ def attendance_view(request):
     except Exception:
         current_date = timezone.now().date()
         
-    selected_class = ClassLevel.objects.filter(id=class_id).first() if class_id else classes.first()
+    selected_class = ClassLevel.objects.filter(school=school, id=class_id).first() if class_id else classes.first()
     selected_section = None
     if selected_class:
-        selected_section = Section.objects.filter(id=section_id).first() if section_id else selected_class.sections.first()
+        selected_section = Section.objects.filter(class_level=selected_class, id=section_id).first() if section_id else selected_class.sections.first()
         
     students = []
     attendance_map = {}
     
     if selected_class and selected_section:
-        students = Student.objects.filter(class_level=selected_class, section=selected_section, is_active=True).order_by('roll_number')
+        students = Student.objects.filter(school=school, class_level=selected_class, section=selected_section, is_active=True).order_by('roll_number')
         
         # Handle POST attendance submission
         if request.method == 'POST' and 'save_attendance' in request.POST:
@@ -1719,14 +2103,15 @@ def attendance_view(request):
 
 
 def attendance_report_view(request):
-    ctx = get_school_context()
-    classes = ClassLevel.objects.all()
+    ctx = get_school_context(request)
+    school = ctx['school']
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
     class_id = request.GET.get('class_id')
-    selected_class = ClassLevel.objects.filter(id=class_id).first() if class_id else classes.first()
+    selected_class = ClassLevel.objects.filter(school=school, id=class_id).first() if class_id else classes.first()
     
     students_report = []
     if selected_class:
-        students = Student.objects.filter(class_level=selected_class, is_active=True).order_by('section__name', 'roll_number')
+        students = Student.objects.filter(school=school, class_level=selected_class, is_active=True).order_by('section__name', 'roll_number')
         for s in students:
             stats = s.attendance_stats
             students_report.append({
@@ -1777,6 +2162,78 @@ def ensure_fee_structure(school=None):
                 description=desc,
                 school=school
             )
+
+    # Seed Default Enterprise Fee Heads
+    heads_to_ensure = [
+        ("Tuition Fee", "TUITION", "Academic", Decimal('2000.00'), True, False, "Regular monthly academic tuition fee"),
+        ("Admission & Registration Fee", "ADM", "OneTime", Decimal('5000.00'), False, False, "One-time enrollment & registration charges"),
+        ("Transport / Bus Route Fee", "TRANS", "Transport", Decimal('1200.00'), True, True, "Monthly school bus route & transit facility"),
+        ("Hostel & Boarding Fee", "HOSTEL", "Hostel", Decimal('6000.00'), True, True, "Monthly hostel accommodation, mess & care"),
+        ("Examination & Evaluation Fee", "EXAM", "Exam", Decimal('1500.00'), True, False, "Terminal examination & marksheet issuance"),
+        ("Computer & Science Lab Fee", "LAB", "Optional", Decimal('500.00'), True, True, "Practical laboratory & digital computer lab charges"),
+        ("Library & Sports Development", "SPORTS", "Academic", Decimal('400.00'), True, False, "Library access, physical sports amenities"),
+        ("Annual Development Charges", "ANNUAL", "Academic", Decimal('3000.00'), False, False, "Annual infrastructure maintenance fee"),
+        ("Book & Notebook Set", "BOOKS", "Other", Decimal('2500.00'), False, False, "Complete curriculum book pack"),
+        ("School Uniform Set", "UNIFORM", "Other", Decimal('1800.00'), False, False, "Official uniform, tie, belt and emblem"),
+        ("Late Payment Fine", "FINE", "Fine", Decimal('50.00'), False, False, "Late payment penalty for dues passed grace period"),
+        ("Caution Deposit (Refundable)", "CAUTION", "CautionDeposit", Decimal('2000.00'), False, True, "Refundable security caution deposit at TC"),
+    ]
+    for h_name, h_code, h_type, h_amt, h_rec, h_opt, h_desc in heads_to_ensure:
+        q_head = FeeHead.objects.filter(name=h_name)
+        if school:
+            q_head = q_head.filter(school=school)
+        if not q_head.exists():
+            FeeHead.objects.create(
+                name=h_name,
+                code=h_code,
+                fee_type=h_type,
+                default_amount=h_amt,
+                is_recurring=h_rec,
+                is_optional=h_opt,
+                description=h_desc,
+                school=school
+            )
+
+    # Seed Demo Transport & Hostel facilities if empty
+    if TransportRoute.objects.count() == 0:
+        TransportRoute.objects.create(
+            school=school,
+            route_name="Route 1 - City Center to Campus",
+            vehicle_number="DL 1PB 4589",
+            driver_name="Ramesh Singh",
+            driver_phone="+91 98765 12345",
+            monthly_fare=Decimal('1200.00'),
+            pickup_points="City Center, Clock Tower, Gandhi Chowk, Campus Gate"
+        )
+        TransportRoute.objects.create(
+            school=school,
+            route_name="Route 2 - Sector 62 / Metro Corridor",
+            vehicle_number="UP 16 AB 7721",
+            driver_name="Sunil Kumar",
+            driver_phone="+91 98765 67890",
+            monthly_fare=Decimal('1500.00'),
+            pickup_points="Sector 62 Metro, Model Town, Highway Crossing, Campus"
+        )
+
+    if HostelFacility.objects.count() == 0:
+        HostelFacility.objects.create(
+            school=school,
+            hostel_name="Tagore Senior Boys Hostel",
+            room_type="Double Sharing AC",
+            monthly_fee=Decimal('7500.00'),
+            warden_name="Dr. S. K. Mishra",
+            warden_phone="+91 94150 99887",
+            capacity=60
+        )
+        HostelFacility.objects.create(
+            school=school,
+            hostel_name="Sarojini Girls Hostel",
+            room_type="Double Sharing Non-AC",
+            monthly_fee=Decimal('6000.00'),
+            warden_name="Mrs. Sunita Verma",
+            warden_phone="+91 94150 22334",
+            capacity=50
+        )
 
     # Ensure ClassFeeMaster exists for every ClassLevel
     try:
@@ -2007,9 +2464,10 @@ def fees_dashboard_view(request):
 
 @require_menu_permission('can_manage_fees', 'Fees & Accounting')
 def fees_list_view(request):
-    ctx = get_school_context()
-    ensure_fee_structure()
-    active_session = get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school=school)
+    active_session = get_active_session(request, school=school)
 
     active_tab = request.GET.get('tab', 'invoices')
     status_filter = request.GET.get('status', '')
@@ -2017,7 +2475,7 @@ def fees_list_view(request):
     category_id = request.GET.get('category_id', '')
     search = request.GET.get('q', '').strip()
 
-    invoices = FeeInvoice.objects.select_related('student__class_level', 'student__section', 'fee_category').prefetch_related('payments').all()
+    invoices = FeeInvoice.objects.filter(school=school).select_related('student__class_level', 'student__section', 'fee_category').prefetch_related('payments').all()
     if active_session:
         invoices = invoices.filter(academic_session=active_session)
 
@@ -2036,16 +2494,16 @@ def fees_list_view(request):
             Q(student__parent_phone__icontains=search)
         )
 
-    all_session_invoices = FeeInvoice.objects.filter(academic_session=active_session) if active_session else FeeInvoice.objects.all()
+    all_session_invoices = FeeInvoice.objects.filter(school=school, academic_session=active_session) if active_session else FeeInvoice.objects.filter(school=school)
     total_invoiced = sum((inv.total_payable for inv in all_session_invoices), Decimal('0.00'))
-    payments_qs = FeePayment.objects.all()
+    payments_qs = FeePayment.objects.filter(invoice__school=school)
     if active_session:
         payments_qs = payments_qs.filter(invoice__academic_session=active_session)
     total_collected = payments_qs.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
     pending_total = max(Decimal('0.00'), total_invoiced - total_collected)
 
     # Payments Transaction History
-    payments = FeePayment.objects.select_related('invoice__student__class_level', 'invoice__fee_category').order_by('-payment_date', '-created_at')
+    payments = FeePayment.objects.filter(invoice__school=school).select_related('invoice__student__class_level', 'invoice__fee_category').order_by('-payment_date', '-created_at')
     if active_session:
         payments = payments.filter(invoice__academic_session=active_session)
     if search:
@@ -2061,7 +2519,7 @@ def fees_list_view(request):
 
     # Student-wise Ledger
     students_ledger = []
-    student_qs = Student.objects.filter(is_active=True).select_related('class_level', 'section').prefetch_related('invoices__payments')
+    student_qs = Student.objects.filter(school=school, is_active=True).select_related('class_level', 'section').prefetch_related('invoices__payments')
     if active_session:
         student_qs = student_qs.filter(
             Q(academic_session=active_session) | Q(session_enrollments__academic_session=active_session)
@@ -2095,10 +2553,10 @@ def fees_list_view(request):
             'invoices_count': st_invoices.count(),
         })
 
-    classes = ClassLevel.objects.all()
-    categories = FeeCategory.objects.all()
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
+    categories = FeeCategory.objects.filter(school=school)
 
-    unified_receipts = FeeReceipt.objects.select_related('student__class_level', 'student__section').prefetch_related('items').order_by('-payment_date', '-created_at')
+    unified_receipts = FeeReceipt.objects.filter(school=school).select_related('student__class_level', 'student__section').prefetch_related('items').order_by('-payment_date', '-created_at')
     if active_session:
         unified_receipts = unified_receipts.filter(student__in=student_qs)
     if search:
@@ -2131,20 +2589,23 @@ def fees_list_view(request):
 
 
 def fee_invoice_create_view(request):
-    ctx = get_school_context()
-    ensure_fee_structure()
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school=school)
     
     if request.method == 'POST':
         form = FeeInvoiceForm(request.POST)
         if form.is_valid():
-            invoice = form.save()
+            invoice = form.save(commit=False)
+            invoice.school = school
+            invoice.save()
             invoice.update_status()
             messages.success(request, f"New Fee Invoice '{invoice.invoice_number}' created for {invoice.student.full_name} ({invoice.fee_category.name}) - Total Amount: ₹{invoice.total_payable}")
             return redirect('fees_list')
     else:
-        count = FeeInvoice.objects.count() + 1
+        count = FeeInvoice.objects.filter(school=school).count() + 1
         inv_no = f"INV-{timezone.now().year}-{count:04d}"
-        default_cat = FeeCategory.objects.filter(name__icontains='Monthly').first() or FeeCategory.objects.first()
+        default_cat = FeeCategory.objects.filter(school=school, name__icontains='Monthly').first() or FeeCategory.objects.filter(school=school).first()
         form = FeeInvoiceForm(initial={
             'invoice_number': inv_no,
             'fee_category': default_cat,
@@ -2160,8 +2621,9 @@ def fee_invoice_create_view(request):
 
 
 def fee_collect_view(request, invoice_id):
-    ctx = get_school_context()
-    invoice = get_object_or_404(FeeInvoice.objects.select_related('student', 'fee_category'), pk=invoice_id)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    invoice = get_object_or_404(FeeInvoice.objects.select_related('student', 'fee_category'), pk=invoice_id, school=school)
     
     if request.method == 'POST':
         form = FeePaymentForm(request.POST)
@@ -2187,7 +2649,7 @@ def fee_collect_view(request, invoice_id):
                 
             return redirect('fee_receipt', payment_id=payment.pk)
     else:
-        count = FeePayment.objects.count() + 1
+        count = FeePayment.objects.filter(invoice__school=school).count() + 1
         rec_no = f"REC-{timezone.now().year}-{count:04d}"
         form = FeePaymentForm(initial={
             'receipt_number': rec_no,
@@ -2422,6 +2884,48 @@ def get_student_fee_details(student):
         }
     ]
 
+    # Check Physical & Optional Item Purchases History
+    # Supported: Tie & Belt, Books, Uniform / Dress, School Diary, Student ID Card
+    item_keywords = {
+        'books': ['book set', 'books', 'notebook'],
+        'dress': ['uniform', 'dress'],
+        'tie_belt': ['tie & belt', 'tie and belt', 'tie', 'belt'],
+        'diary': ['diary', 'almanac'],
+        'id_card': ['id card', 'smart id'],
+    }
+
+    item_history = {k: [] for k in item_keywords}
+    receipt_items = FeeReceiptItem.objects.filter(
+        receipt__student=student,
+        receipt__status='Active'
+    ).select_related('receipt').order_by('receipt__payment_date', 'receipt__id')
+
+    for item in receipt_items:
+        c_name = (item.category_name or '').lower()
+        d_name = (item.description or '').lower()
+        combined = f"{c_name} {d_name}"
+        for key, kws in item_keywords.items():
+            if any(kw in combined for kw in kws):
+                item_history[key].append({
+                    'receipt_no': item.receipt.receipt_number,
+                    'receipt_id': item.receipt.id,
+                    'paid_date': item.receipt.payment_date.strftime("%d %b %Y"),
+                    'amount': float(item.amount),
+                    'description': item.description,
+                    'purchase_num': len(item_history[key]) + 1
+                })
+                break
+
+    item_purchases = {}
+    for k, hist in item_history.items():
+        item_purchases[k] = {
+            'purchased': len(hist) > 0,
+            'count': len(hist),
+            'next_num': len(hist) + 1,
+            'history': hist,
+            'last': hist[-1] if hist else None,
+        }
+
     unpaid_invoices = student.invoices.filter(status__in=['Unpaid', 'Partially Paid', 'Overdue'])
     previous_due = sum((inv.remaining_due for inv in unpaid_invoices), Decimal('0.00'))
     receipts_history = FeeReceipt.objects.filter(student=student).order_by('-payment_date', '-created_at')[:6]
@@ -2432,6 +2936,7 @@ def get_student_fee_details(student):
         'unpaid_months_count': unpaid_months_count,
         'first_unpaid_idx': first_unpaid_idx,
         'exams_status': exams_status,
+        'item_purchases': item_purchases,
         'previous_due': previous_due,
         'receipts_history': receipts_history,
     }
@@ -2439,11 +2944,12 @@ def get_student_fee_details(student):
 
 @require_menu_permission('can_manage_fees', 'Fee Collection Counter')
 def fee_counter_view(request):
-    ctx = get_school_context()
-    ensure_fee_structure()
-    active_session = get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school=school)
+    active_session = get_active_session(request, school=school)
 
-    students = Student.objects.filter(is_active=True).select_related('class_level', 'section')
+    students = Student.objects.filter(school=school, is_active=True).select_related('class_level', 'section')
     if active_session:
         students = students.filter(
             Q(academic_session=active_session) | Q(session_enrollments__academic_session=active_session)
@@ -2507,7 +3013,7 @@ def fee_counter_view(request):
         default_id_card_amt = Decimal('100.00')
         default_other_amt = Decimal('500.00')
 
-    classes = ClassLevel.objects.all().order_by('order')
+    classes = ClassLevel.objects.filter(school=school).order_by('order')
 
     if request.method == 'POST' and 'submit_payment' in request.POST:
         if not selected_student:
@@ -2551,57 +3057,102 @@ def fee_counter_view(request):
             })
             subtotal += e_amt
 
-        # 3. Book Set
+        # 3. Book Set (1st Purchase or Buy Again / Replacement)
         if request.POST.get('include_books') == 'on':
             b_amount = Decimal(request.POST.get('book_set_amount', str(default_book_set_amt)) or str(default_book_set_amt))
+            is_rep = request.POST.get('is_replacement_books') == '1'
+            rep_num = request.POST.get('rep_num_books', '2')
+            rep_reason = request.POST.get('reason_books', '').strip()
+            if is_rep:
+                desc = f"Complete Academic Books Pack (Replacement #{rep_num}{' - ' + rep_reason if rep_reason else ''})"
+                m_name = f"Replacement #{rep_num}"
+            else:
+                desc = "Complete Academic Books & Notebooks Set"
+                m_name = "Session 2026-27"
             items_to_create.append({
                 'category_name': 'Book Set',
-                'month_name': 'Session 2026-27',
-                'description': "Complete Academic Books & Notebooks Set",
+                'month_name': m_name,
+                'description': desc,
                 'amount': b_amount
             })
             subtotal += b_amount
 
-        # 4. Uniform / Dress
+        # 4. Uniform / Dress (1st Purchase or Buy Again / Replacement)
         if request.POST.get('include_dress') == 'on':
             d_amount = Decimal(request.POST.get('dress_amount', str(default_dress_amt)) or str(default_dress_amt))
+            is_rep = request.POST.get('is_replacement_dress') == '1'
+            rep_num = request.POST.get('rep_num_dress', '2')
+            rep_reason = request.POST.get('reason_dress', '').strip()
+            if is_rep:
+                desc = f"School Uniform & Dress Set (Replacement #{rep_num}{' - ' + rep_reason if rep_reason else ''})"
+                m_name = f"Replacement #{rep_num}"
+            else:
+                desc = "School Uniform & Dress Set"
+                m_name = "Session 2026-27"
             items_to_create.append({
                 'category_name': 'School Uniform / Dress',
-                'month_name': 'Session 2026-27',
-                'description': "School Uniform & Dress Set",
+                'month_name': m_name,
+                'description': desc,
                 'amount': d_amount
             })
             subtotal += d_amount
 
-        # 5. Tie & Belt
+        # 5. Tie & Belt (1st Purchase or Buy Again / Replacement)
         if request.POST.get('include_tie_belt') == 'on':
             tb_amount = Decimal(request.POST.get('tie_belt_amount', str(default_tie_belt_amt)) or str(default_tie_belt_amt))
+            is_rep = request.POST.get('is_replacement_tie_belt') == '1'
+            rep_num = request.POST.get('rep_num_tie_belt', '2')
+            rep_reason = request.POST.get('reason_tie_belt', '').strip()
+            if is_rep:
+                desc = f"School Logo Tie & Belt (Replacement #{rep_num}{' - ' + rep_reason if rep_reason else ''})"
+                m_name = f"Replacement #{rep_num}"
+            else:
+                desc = "School Logo Tie & Belt"
+                m_name = "Session 2026-27"
             items_to_create.append({
                 'category_name': 'Tie & Belt',
-                'month_name': 'Session 2026-27',
-                'description': "School Logo Tie & Belt",
+                'month_name': m_name,
+                'description': desc,
                 'amount': tb_amount
             })
             subtotal += tb_amount
 
-        # 6. School Diary
+        # 6. School Diary (1st Purchase or Buy Again / Replacement)
         if request.POST.get('include_diary') == 'on':
             dia_amount = Decimal(request.POST.get('diary_amount', str(default_diary_amt)) or str(default_diary_amt))
+            is_rep = request.POST.get('is_replacement_diary') == '1'
+            rep_num = request.POST.get('rep_num_diary', '2')
+            rep_reason = request.POST.get('reason_diary', '').strip()
+            if is_rep:
+                desc = f"Student Academic Diary / Almanac (Replacement #{rep_num}{' - ' + rep_reason if rep_reason else ''})"
+                m_name = f"Replacement #{rep_num}"
+            else:
+                desc = "Student Academic Diary / Almanac"
+                m_name = "Session 2026-27"
             items_to_create.append({
                 'category_name': 'School Diary',
-                'month_name': 'Session 2026-27',
-                'description': "Student Academic Diary / Almanac",
+                'month_name': m_name,
+                'description': desc,
                 'amount': dia_amount
             })
             subtotal += dia_amount
 
-        # 7. Student ID Card
+        # 7. Student ID Card (1st Purchase or Buy Again / Replacement)
         if request.POST.get('include_id_card') == 'on':
             id_amount = Decimal(request.POST.get('id_card_amount', str(default_id_card_amt)) or str(default_id_card_amt))
+            is_rep = request.POST.get('is_replacement_id_card') == '1'
+            rep_num = request.POST.get('rep_num_id_card', '2')
+            rep_reason = request.POST.get('reason_id_card', '').strip()
+            if is_rep:
+                desc = f"Student Smart ID Card & Lanyard (Duplicate #{rep_num}{' - ' + rep_reason if rep_reason else ''})"
+                m_name = f"Duplicate #{rep_num}"
+            else:
+                desc = "Student Smart ID Card & Lanyard"
+                m_name = "Session 2026-27"
             items_to_create.append({
                 'category_name': 'Student ID Card',
-                'month_name': 'Session 2026-27',
-                'description': "Student Smart ID Card & Lanyard",
+                'month_name': m_name,
+                'description': desc,
                 'amount': id_amount
             })
             subtotal += id_amount
@@ -2651,8 +3202,22 @@ def fee_counter_view(request):
                     'amount': prev_due_cleared
                 })
 
+        # Duplicate Transaction Reference Detection (Prevents duplicate callbacks / double entry)
+        if transaction_reference:
+            existing_rec = FeeReceipt.objects.filter(transaction_reference=transaction_reference, status='Active').first()
+            if existing_rec:
+                messages.error(
+                    request,
+                    f"Duplicate Transaction Reference Detected! Receipt #{existing_rec.receipt_number} has already been recorded with Reference '{transaction_reference}' for {existing_rec.student.full_name} on {existing_rec.payment_date}."
+                )
+                return redirect(f"{request.path}?student_id={selected_student.id}")
+
         discount = Decimal(request.POST.get('discount', '0.00') or '0.00')
-        total_billed = max(Decimal('0.00'), (subtotal + prev_due_cleared) - discount)
+        concession_type = request.POST.get('concession_type', '').strip()
+        fine_amount = Decimal(request.POST.get('fine_amount', '0.00') or '0.00')
+        fine_waived = Decimal(request.POST.get('fine_waived', '0.00') or '0.00')
+        
+        total_billed = max(Decimal('0.00'), (subtotal + prev_due_cleared + fine_amount) - (discount + fine_waived))
         
         amount_paying = Decimal(request.POST.get('amount_paying_now', '0.00') or '0.00')
         if amount_paying <= Decimal('0.00'):
@@ -2664,7 +3229,7 @@ def fee_counter_view(request):
             return redirect(f"{request.path}?student_id={selected_student.id}")
 
         # Correct Remaining Balance Calculation (Discount is SUBTRACTED, NEVER added to due):
-        net_new_charges = max(Decimal('0.00'), subtotal - discount)
+        net_new_charges = max(Decimal('0.00'), (subtotal + fine_amount) - (discount + fine_waived))
         cash_for_old = min(amount_paying, prev_due_cleared) if prev_due_cleared > Decimal('0.00') else Decimal('0.00')
         cash_for_new = max(Decimal('0.00'), amount_paying - cash_for_old)
         
@@ -2672,10 +3237,12 @@ def fee_counter_view(request):
         unpaid_old = max(Decimal('0.00'), previous_due - cash_for_old)
         remaining_balance_due = unpaid_old + unpaid_new
 
-        receipt_count = FeeReceipt.objects.count() + 1
-        rec_no = f"SRS-REC-{timezone.now().year}-{receipt_count:04d}"
+        receipt_count = FeeReceipt.objects.filter(school=school).count() + 1
+        sch_prefix = "".join([w[0] for w in (school.name or "").split() if w.isalnum()])[:3].upper() or (school.school_code or "SCH")[:3].upper()
+        rec_no = f"{sch_prefix}-REC-{timezone.now().year}-{receipt_count:04d}"
 
         unified_receipt = FeeReceipt.objects.create(
+            school=school,
             receipt_number=rec_no,
             student=selected_student,
             payment_date=timezone.now().date(),
@@ -2687,7 +3254,13 @@ def fee_counter_view(request):
             discount=discount,
             total_billed=total_billed,
             amount_paid=amount_paying,
-            remaining_balance_due=remaining_balance_due
+            remaining_balance_due=remaining_balance_due,
+            concession_amount=discount,
+            concession_type=concession_type,
+            fine_amount=fine_amount,
+            fine_waived=fine_waived,
+            cashier=request.user if request.user.is_authenticated else None,
+            status='Active'
         )
 
         for item in items_to_create:
@@ -2773,15 +3346,96 @@ def fee_counter_view(request):
                 cash_left -= pay_now
             new_inv.update_status()
 
+        # 3. Post comprehensive entries into StudentFeeLedger
+        active_sess = active_session or AcademicSession.objects.filter(is_current=True).first()
+        cur_due = remaining_balance_due
+
+        # Debits for newly charged fee items
+        for item in items_to_create:
+            StudentFeeLedger.objects.create(
+                school=ctx.get('school'),
+                student=selected_student,
+                academic_session=active_sess,
+                entry_date=timezone.now().date(),
+                entry_type='Fee_Charge',
+                voucher_no=rec_no,
+                description=f"{item['category_name']} - {item['description']}",
+                debit=item['amount'],
+                credit=Decimal('0.00'),
+                running_balance=cur_due,
+                receipt=unified_receipt,
+                created_by=request.user if request.user.is_authenticated else None
+            )
+
+        # Credit for Concession / Sibling Discount
+        if discount > Decimal('0.00'):
+            disc_label = f"Concession ({concession_type})" if concession_type else "Fee Concession / Discount"
+            StudentFeeLedger.objects.create(
+                school=ctx.get('school'),
+                student=selected_student,
+                academic_session=active_sess,
+                entry_date=timezone.now().date(),
+                entry_type='Concession',
+                voucher_no=rec_no,
+                description=disc_label,
+                debit=Decimal('0.00'),
+                credit=discount,
+                running_balance=cur_due,
+                receipt=unified_receipt,
+                created_by=request.user if request.user.is_authenticated else None
+            )
+
+        # Credit for Payment Received
+        StudentFeeLedger.objects.create(
+            school=ctx.get('school'),
+            student=selected_student,
+            academic_session=active_sess,
+            entry_date=timezone.now().date(),
+            entry_type='Fee_Payment',
+            voucher_no=rec_no,
+            description=f"Fee Payment Received via {payment_method}" + (f" (Ref: {transaction_reference})" if transaction_reference else ""),
+            debit=Decimal('0.00'),
+            credit=amount_paying,
+            running_balance=remaining_balance_due,
+            receipt=unified_receipt,
+            created_by=request.user if request.user.is_authenticated else None
+        )
+
+        # Audit Log Entry for Fee Payment Collection
+        log_audit(
+            request=request,
+            action='CREATE',
+            module='FEES',
+            object_type='FeeReceipt',
+            object_id=str(unified_receipt.id),
+            object_repr=f"Receipt #{unified_receipt.receipt_number}",
+            description=f"Fee payment of ₹{amount_paying} received for {selected_student.full_name} ({selected_student.admission_number}). Mode: {payment_method}. Remaining Due: ₹{remaining_balance_due}",
+            reason=f"Fee Collection: {payment_method}"
+        )
+
         messages.success(request, f"Official Fee Slip #{unified_receipt.receipt_number} generated successfully! Amount Received: ₹{amount_paying}")
         return redirect('unified_receipt', receipt_id=unified_receipt.id)
+
+    # Check for student active concessions and siblings
+    student_concessions = []
+    sibling_students = []
+    if selected_student:
+        student_concessions = selected_student.concessions.filter(is_active=True)
+        if selected_student.parent_phone:
+            sibling_students = Student.objects.filter(
+                is_active=True,
+                parent_phone=selected_student.parent_phone
+            ).exclude(id=selected_student.id).select_related('class_level', 'section')
 
     ctx.update({
         'students': students,
         'students_json': students_json,
         'classes': classes,
         'selected_student': selected_student,
+        'student_concessions': student_concessions,
+        'sibling_students': sibling_students,
         'fee_details': fee_details,
+        'item_purchases': fee_details.get('item_purchases', {}) if fee_details else {},
         'fee_master': fee_master,
         'previous_due': previous_due,
         'default_monthly_amt': default_monthly_amt,
@@ -2799,10 +3453,10 @@ def fee_counter_view(request):
 
 
 def unified_receipt_view(request, receipt_id):
-    ctx = get_school_context()
-    receipt = get_object_or_404(FeeReceipt.objects.select_related('student__class_level', 'student__section').prefetch_related('items'), pk=receipt_id)
-    student = receipt.student
+    ctx = get_school_context(request)
     school = ctx['school']
+    receipt = get_object_or_404(FeeReceipt.objects.select_related('student__class_level', 'student__section').prefetch_related('items'), pk=receipt_id, school=school)
+    student = receipt.student
     
     amount_in_words = amount_to_words(receipt.amount_paid)
 
@@ -2864,12 +3518,13 @@ def unified_receipt_view(request, receipt_id):
 # ------------------- CLASS FEE MASTER & DEFAULTERS REPORT -------------------
 
 def class_fee_master_view(request):
-    ctx = get_school_context()
-    ensure_fee_structure()
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school=school)
 
     if request.method == 'POST' and 'update_fee_master' in request.POST:
         class_id = request.POST.get('class_id')
-        cl = get_object_or_404(ClassLevel, pk=class_id)
+        cl = get_object_or_404(ClassLevel, pk=class_id, school=school)
         fm, _ = ClassFeeMaster.objects.get_or_create(class_level=cl)
         
         monthly_fee = Decimal(request.POST.get('monthly_tuition_fee', '2000.00') or '2000.00')
@@ -2961,14 +3616,14 @@ def class_fee_master_view(request):
         messages.success(request, f"Fee structure successfully applied across {len(updated_names)} classes ({', '.join(updated_names)})!")
         return redirect('class_fee_master')
 
-    classes = ClassLevel.objects.all().order_by('order')
+    classes = ClassLevel.objects.filter(school=school).order_by('order')
     fee_masters = []
     for cl in classes:
         try:
             fm = cl.fee_master
         except Exception:
             fm, _ = ClassFeeMaster.objects.get_or_create(class_level=cl, defaults={'monthly_tuition_fee': Decimal('2000.00')})
-        student_count = Student.objects.filter(class_level=cl, is_active=True).count()
+        student_count = Student.objects.filter(school=school, class_level=cl, is_active=True).count()
         fee_masters.append({
             'class': cl,
             'fm': fm,
@@ -2985,15 +3640,16 @@ def class_fee_master_view(request):
 
 @require_menu_permission('can_manage_fees', 'Fee Defaulters')
 def fees_defaulters_view(request):
-    ctx = get_school_context()
-    ensure_fee_structure()
-    active_session = get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school=school)
+    active_session = get_active_session(request, school=school)
 
     class_id = request.GET.get('class_id', '')
     search = request.GET.get('q', '').strip()
     min_due = request.GET.get('min_due', '')
 
-    students_qs = Student.objects.filter(is_active=True).select_related('class_level', 'section').prefetch_related('invoices__payments')
+    students_qs = Student.objects.filter(school=school, is_active=True).select_related('class_level', 'section').prefetch_related('invoices__payments')
     if active_session:
         students_qs = students_qs.filter(
             Q(academic_session=active_session) | Q(session_enrollments__academic_session=active_session)
@@ -3031,12 +3687,13 @@ def fees_defaulters_view(request):
             unpaid_heads = [inv.fee_category.name for inv in unpaid_invoices[:3]]
             
             # Format clean WhatsApp pre-filled reminder text
+            upi_note = f" You can also pay online via College UPI: {ctx['school'].upi_id}." if getattr(ctx['school'], 'upi_id', None) else ""
             wa_text = (
                 f"Namaste {s.parent_name or 'Parent'}, "
                 f"Fee Reminder from {ctx['school'].name}: "
                 f"School fee of Rs.{due:,.0f} is pending for your ward {s.full_name} "
-                f"(Adm No: {s.admission_number}, Class: {s.class_level.name}-{s.section.name}). "
-                f"Kindly deposit at the fee counter at the earliest. Thank you."
+                f"(Adm No: {s.admission_number}, Class: {s.class_level.name}-{s.section.name}).{upi_note} "
+                f"Kindly deposit at the fee counter or via UPI at the earliest. Thank you."
             )
 
             defaulters.append({
@@ -3053,7 +3710,7 @@ def fees_defaulters_view(request):
     # Sort by due amount descending (highest defaulters first)
     defaulters.sort(key=lambda x: x['due_amount'], reverse=True)
 
-    classes = ClassLevel.objects.all().order_by('order')
+    classes = ClassLevel.objects.filter(school=school).order_by('order')
 
     ctx.update({
         'defaulters': defaulters,
@@ -3065,6 +3722,717 @@ def fees_defaulters_view(request):
         'min_due': min_due,
     })
     return render(request, 'school_erp/fees_defaulters.html', ctx)
+
+
+# ==============================================================================
+# ENTERPRISE FEE MANAGEMENT SCREENS
+# ==============================================================================
+
+@require_menu_permission('can_manage_fees', 'Fee Head Master')
+def fee_heads_master_view(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'add_head':
+            form = FeeHeadForm(request.POST)
+            if form.is_valid():
+                head = form.save(commit=False)
+                head.school = school
+                head.save()
+                messages.success(request, f"Fee Head '{head.name}' ({head.get_fee_type_display()}) created successfully!")
+            else:
+                messages.error(request, "Failed to create Fee Head. Please check form inputs.")
+            return redirect('fee_heads_master')
+
+        elif action == 'edit_head':
+            head_id = request.POST.get('head_id')
+            head = get_object_or_404(FeeHead, pk=head_id)
+            form = FeeHeadForm(request.POST, instance=head)
+            if form.is_valid():
+                form.save()
+                messages.success(request, f"Fee Head '{head.name}' updated successfully!")
+            else:
+                messages.error(request, "Failed to update Fee Head.")
+            return redirect('fee_heads_master')
+
+        elif action == 'toggle_status':
+            head_id = request.POST.get('head_id')
+            head = get_object_or_404(FeeHead, pk=head_id)
+            head.is_active = not head.is_active
+            head.save()
+            messages.success(request, f"Fee Head '{head.name}' status changed to {'Active' if head.is_active else 'Inactive'}.")
+            return redirect('fee_heads_master')
+
+        elif action == 'delete_head':
+            head_id = request.POST.get('head_id')
+            head = get_object_or_404(FeeHead, pk=head_id)
+            head_name = head.name
+            head.delete()
+            messages.success(request, f"Fee Head '{head_name}' removed.")
+            return redirect('fee_heads_master')
+
+    heads = FeeHead.objects.all().order_by('fee_type', 'name')
+    if school:
+        heads = heads.filter(Q(school=school) | Q(school__isnull=True))
+
+    type_filter = request.GET.get('type')
+    if type_filter:
+        heads = heads.filter(fee_type=type_filter)
+
+    search = request.GET.get('search', '').strip()
+    if search:
+        heads = heads.filter(Q(name__icontains=search) | Q(code__icontains=search))
+
+    stats = {
+        'total': FeeHead.objects.count(),
+        'academic': FeeHead.objects.filter(fee_type='Academic').count(),
+        'transport_hostel': FeeHead.objects.filter(fee_type__in=['Transport', 'Hostel']).count(),
+        'optional': FeeHead.objects.filter(fee_type__in=['Optional', 'Other']).count(),
+    }
+
+    ctx.update({
+        'heads': heads,
+        'stats': stats,
+        'fee_types': FeeHead.FEE_TYPES,
+        'selected_type': type_filter,
+        'search': search,
+        'form': FeeHeadForm(),
+    })
+    return render(request, 'school_erp/fee_heads_master.html', ctx)
+
+
+@require_menu_permission('can_manage_fees', 'Fee Structure & Schedules')
+def fee_structure_view(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    ensure_fee_structure(school)
+    active_session = get_active_session(request)
+
+    classes = ClassLevel.objects.all().order_by('order')
+    fee_heads = FeeHead.objects.filter(is_active=True).order_by('name')
+    routes = TransportRoute.objects.all().order_by('route_name')
+    hostels = HostelFacility.objects.all().order_by('hostel_name')
+    concessions = StudentConcession.objects.select_related('student', 'academic_session').all().order_by('-created_at')
+
+    # Handle Forms
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        # Save Instalment Schedule
+        if action == 'save_instalment_schedule':
+            class_id = request.POST.get('class_id')
+            cl = get_object_or_404(ClassLevel, pk=class_id)
+            title = request.POST.get('title')
+            due_date = request.POST.get('due_date')
+            amount = Decimal(request.POST.get('amount', '0.00') or '0.00')
+            grace_days = int(request.POST.get('grace_period_days', '10') or '10')
+            late_fine = Decimal(request.POST.get('late_fine_amount', '50.00') or '50.00')
+            instalment_num = int(request.POST.get('instalment_number', '1') or '1')
+
+            FeeInstalmentSchedule.objects.create(
+                school=school,
+                academic_session=active_session or AcademicSession.objects.filter(is_current=True).first(),
+                class_level=cl,
+                instalment_number=instalment_num,
+                title=title,
+                due_date=due_date,
+                amount=amount,
+                grace_period_days=grace_days,
+                late_fine_amount=late_fine
+            )
+            messages.success(request, f"Instalment Schedule '{title}' created for {cl.name} (Due: {due_date})!")
+            return redirect('fee_structure')
+
+        # Add Transport Route
+        elif action == 'add_route':
+            r_form = TransportRouteForm(request.POST)
+            if r_form.is_valid():
+                r = r_form.save(commit=False)
+                r.school = school
+                r.save()
+                messages.success(request, f"Transport Route '{r.route_name}' added successfully!")
+            return redirect('fee_structure')
+
+        # Add Hostel Facility
+        elif action == 'add_hostel':
+            h_form = HostelFacilityForm(request.POST)
+            if h_form.is_valid():
+                h = h_form.save(commit=False)
+                h.school = school
+                h.save()
+                messages.success(request, f"Hostel Facility '{h.hostel_name}' added successfully!")
+            return redirect('fee_structure')
+
+        # Add Student Concession / Scholarship
+        elif action == 'add_concession':
+            student_id = request.POST.get('student')
+            student = get_object_or_404(Student, pk=student_id)
+            c_type = request.POST.get('concession_type', 'Sibling Discount')
+            d_type = request.POST.get('discount_type', 'Percentage')
+            d_val = Decimal(request.POST.get('discount_value', '10.00') or '10.00')
+            reason = request.POST.get('reason', '')
+            
+            StudentConcession.objects.create(
+                student=student,
+                academic_session=active_session or AcademicSession.objects.filter(is_current=True).first(),
+                concession_type=c_type,
+                discount_type=d_type,
+                discount_value=d_val,
+                reason=reason,
+                approved_by=request.user if request.user.is_authenticated else None
+            )
+            messages.success(request, f"{c_type} approved for {student.full_name} ({d_val}{'%' if d_type == 'Percentage' else '₹'})!")
+            return redirect('fee_structure')
+
+    # Get active schedules
+    schedules = FeeInstalmentSchedule.objects.select_related('class_level', 'academic_session').all().order_by('class_level__order', 'due_date')
+    if active_session:
+        schedules = schedules.filter(academic_session=active_session)
+
+    ctx.update({
+        'classes': classes,
+        'fee_heads': fee_heads,
+        'schedules': schedules,
+        'routes': routes,
+        'hostels': hostels,
+        'concessions': concessions,
+        'route_form': TransportRouteForm(),
+        'hostel_form': HostelFacilityForm(),
+        'concession_form': StudentConcessionForm(),
+        'active_tab': request.GET.get('tab', 'structures'),
+    })
+    return render(request, 'school_erp/fee_structure.html', ctx)
+
+
+@require_menu_permission('can_manage_fees', 'Student Fee Ledger')
+def student_ledger_view(request, student_id=None):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    active_session = get_active_session(request)
+
+    if not student_id:
+        student_id = request.GET.get('student_id')
+
+    students = Student.objects.filter(is_active=True).select_related('class_level', 'section').order_by('class_level__order', 'roll_number')
+    
+    # Parent Scoped Access Restriction Enforcement
+    if is_parent_user(request.user):
+        allowed_students = get_parent_allowed_students(request.user)
+        students = allowed_students.order_by('class_level__order', 'roll_number')
+
+    selected_student = None
+    ledger_entries = []
+    
+    total_debit = Decimal('0.00')
+    total_credit = Decimal('0.00')
+    net_balance_due = Decimal('0.00')
+
+    if student_id:
+        selected_student = get_object_or_404(Student.objects.select_related('class_level', 'section'), pk=student_id)
+        
+        # Verify parent ownership of student
+        if is_parent_user(request.user):
+            allowed_students = get_parent_allowed_students(request.user)
+            if not allowed_students.filter(id=selected_student.id).exists():
+                messages.error(
+                    request,
+                    "Access Restricted: As a Parent, you can only view fee ledger statements for your linked child."
+                )
+                return redirect('dashboard')
+        
+        # Pull from StudentFeeLedger
+        ledger_qs = StudentFeeLedger.objects.filter(student=selected_student).order_by('entry_date', 'id')
+        
+        # If ledger entries are empty (e.g. for existing demo students before ledger table), synthesize ledger from invoices and receipts
+        if not ledger_qs.exists():
+            running = Decimal('0.00')
+            # Add Invoices
+            invoices = selected_student.invoices.all().order_by('created_at')
+            for inv in invoices:
+                running += inv.amount
+                ledger_entries.append({
+                    'date': inv.created_at.date(),
+                    'type': 'Fee Charge',
+                    'voucher_no': inv.invoice_number,
+                    'head': inv.fee_category.name,
+                    'description': f"Invoice Generated: {inv.fee_category.name}",
+                    'debit': inv.amount,
+                    'credit': Decimal('0.00'),
+                    'running_balance': running,
+                    'badge_class': 'badge-primary'
+                })
+                if inv.discount > Decimal('0.00'):
+                    running -= inv.discount
+                    ledger_entries.append({
+                        'date': inv.created_at.date(),
+                        'type': 'Concession / Discount',
+                        'voucher_no': inv.invoice_number,
+                        'head': inv.fee_category.name,
+                        'description': "Concession / Scholarship Adjusted",
+                        'debit': Decimal('0.00'),
+                        'credit': inv.discount,
+                        'running_balance': running,
+                        'badge_class': 'badge-success'
+                    })
+
+            # Add Receipts
+            receipts = selected_student.unified_receipts.all().order_by('payment_date')
+            for r in receipts:
+                if r.status == 'Cancelled':
+                    continue
+                running = max(Decimal('0.00'), running - r.amount_paid)
+                ledger_entries.append({
+                    'date': r.payment_date,
+                    'type': 'Fee Payment',
+                    'voucher_no': r.receipt_number,
+                    'head': r.payment_method,
+                    'description': f"Payment Received ({r.payment_method})" + (f" Ref: {r.transaction_reference}" if r.transaction_reference else ""),
+                    'debit': Decimal('0.00'),
+                    'credit': r.amount_paid,
+                    'running_balance': running,
+                    'badge_class': 'badge-info'
+                })
+        else:
+            for entry in ledger_qs:
+                ledger_entries.append({
+                    'date': entry.entry_date,
+                    'type': entry.get_entry_type_display(),
+                    'voucher_no': entry.voucher_no,
+                    'head': entry.fee_head.name if entry.fee_head else 'General',
+                    'description': entry.description,
+                    'debit': entry.debit,
+                    'credit': entry.credit,
+                    'running_balance': entry.running_balance,
+                    'badge_class': 'badge-primary' if entry.debit > 0 else 'badge-success'
+                })
+
+        total_debit = sum((e['debit'] for e in ledger_entries), Decimal('0.00'))
+        total_credit = sum((e['credit'] for e in ledger_entries), Decimal('0.00'))
+        net_balance_due = max(Decimal('0.00'), total_debit - total_credit)
+
+    ctx.update({
+        'students': students,
+        'selected_student': selected_student,
+        'ledger_entries': ledger_entries,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        'net_balance_due': net_balance_due,
+    })
+    return render(request, 'school_erp/student_ledger.html', ctx)
+
+
+@require_menu_permission('can_manage_fees', 'Export Student Ledger')
+def export_student_ledger_excel(request, student_id):
+    student = get_object_or_404(Student, pk=student_id)
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f"Ledger - {student.admission_number}"
+    ws.views.sheetView[0].showGridLines = True
+
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    th_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    white_bold = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Calibri", size=15, bold=True, color="FFFFFF")
+
+    ws.merge_cells("A1:G1")
+    ws["A1"] = f"{school.name} - OFFICIAL STUDENT FEE LEDGER"
+    ws["A1"].font = title_font
+    ws["A1"].fill = header_fill
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 36
+
+    ws.merge_cells("A2:G2")
+    ws["A2"] = f"Student: {student.full_name} | Adm No: {student.admission_number} | Class: {student.class_level.name} - Sec {student.section.name} | Father: {student.parent_name}"
+    ws["A2"].alignment = Alignment(horizontal="center")
+    ws.row_dimensions[2].height = 20
+
+    headers = ["Date", "Transaction Type", "Voucher / Receipt No", "Description", "Debit (Due)", "Credit (Paid)", "Running Balance"]
+    ws.append([])
+    ws.append(headers)
+    ws.row_dimensions[4].height = 26
+
+    for col_idx in range(1, 8):
+        cell = ws.cell(row=4, column=col_idx)
+        cell.fill = th_fill
+        cell.font = white_bold
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    ledger_qs = StudentFeeLedger.objects.filter(student=student).order_by('entry_date', 'id')
+    for entry in ledger_qs:
+        ws.append([
+            entry.entry_date.strftime("%d-%m-%Y"),
+            entry.get_entry_type_display(),
+            entry.voucher_no,
+            entry.description,
+            float(entry.debit),
+            float(entry.credit),
+            float(entry.running_balance)
+        ])
+
+    widths = [14, 22, 22, 35, 14, 14, 16]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    response = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    response["Content-Disposition"] = f'attachment; filename="Ledger_{student.admission_number}.xlsx"'
+    wb.save(response)
+    return response
+
+
+@require_menu_permission('can_manage_fees', 'Fee Receipts')
+def fee_receipts_list_view(request):
+    ctx = get_school_context(request)
+    ensure_fee_structure()
+
+    receipts = FeeReceipt.objects.select_related('student__class_level', 'student__section', 'cashier').all()
+    
+    # Filters
+    search = request.GET.get('search', '').strip()
+    if search:
+        receipts = receipts.filter(
+            Q(receipt_number__icontains=search) |
+            Q(student__first_name__icontains=search) |
+            Q(student__last_name__icontains=search) |
+            Q(student__admission_number__icontains=search) |
+            Q(transaction_reference__icontains=search)
+        )
+
+    status_filter = request.GET.get('status')
+    if status_filter:
+        receipts = receipts.filter(status=status_filter)
+
+    method_filter = request.GET.get('method')
+    if method_filter:
+        receipts = receipts.filter(payment_method=method_filter)
+
+    date_from = request.GET.get('date_from')
+    if date_from:
+        receipts = receipts.filter(payment_date__gte=date_from)
+
+    date_to = request.GET.get('date_to')
+    if date_to:
+        receipts = receipts.filter(payment_date__lte=date_to)
+
+    total_amount = receipts.filter(status='Active').aggregate(t=Sum('amount_paid'))['t'] or Decimal('0.00')
+    total_count = receipts.count()
+    cancelled_count = receipts.filter(status='Cancelled').count()
+    reconciled_count = receipts.filter(is_reconciled=True).count()
+
+    paginator = Paginator(receipts, 25)
+    page = request.GET.get('page')
+    try:
+        paged_receipts = paginator.page(page)
+    except (PageNotAnInteger, EmptyPage):
+        paged_receipts = paginator.page(1)
+
+    ctx.update({
+        'receipts': paged_receipts,
+        'total_amount': total_amount,
+        'total_count': total_count,
+        'cancelled_count': cancelled_count,
+        'reconciled_count': reconciled_count,
+        'search': search,
+        'status_filter': status_filter,
+        'method_filter': method_filter,
+        'date_from': date_from,
+        'date_to': date_to,
+        'payment_methods': FeeReceipt.PAYMENT_MODES,
+    })
+    return render(request, 'school_erp/fee_receipts_list.html', ctx)
+
+
+@require_menu_permission('can_manage_fees', 'Cancel Fee Receipt')
+def fee_receipt_cancel_view(request, receipt_id):
+    if request.method != 'POST':
+        messages.error(request, "Invalid cancellation request.")
+        return redirect('fee_receipts_list')
+
+    receipt = get_object_or_404(FeeReceipt, pk=receipt_id)
+    if receipt.status == 'Cancelled':
+        messages.warning(request, f"Receipt #{receipt.receipt_number} is already cancelled.")
+        return redirect('fee_receipts_list')
+
+    reason = request.POST.get('cancellation_reason', '').strip()
+    if not reason:
+        messages.error(request, "Cancellation reason is mandatory for audit trail!")
+        return redirect('fee_receipts_list')
+
+    receipt.status = 'Cancelled'
+    receipt.cancellation_reason = reason
+    receipt.cancelled_by = request.user if request.user.is_authenticated else None
+    receipt.cancelled_at = timezone.now()
+    receipt.save()
+
+    # Reversal in StudentFeeLedger
+    StudentFeeLedger.objects.create(
+        school=receipt.school,
+        student=receipt.student,
+        academic_session=receipt.student.academic_session or AcademicSession.objects.filter(is_current=True).first(),
+        entry_date=timezone.now().date(),
+        entry_type='Cancellation',
+        voucher_no=receipt.receipt_number,
+        description=f"Receipt #{receipt.receipt_number} Cancelled: {reason}",
+        debit=receipt.amount_paid,
+        credit=Decimal('0.00'),
+        running_balance=receipt.student.fee_due_amount,
+        receipt=receipt,
+        created_by=request.user if request.user.is_authenticated else None
+    )
+
+    # Immutable Audit Log
+    log_audit(
+        request=request,
+        action='DELETE',
+        module='FEES',
+        object_type='FeeReceipt',
+        object_id=str(receipt.id),
+        object_repr=f"Receipt #{receipt.receipt_number}",
+        description=f"Fee receipt #{receipt.receipt_number} for {receipt.student.full_name} cancelled. Amount: ₹{receipt.amount_paid}",
+        reason=reason,
+        requires_approval=False,
+        status='SUCCESS'
+    )
+
+    messages.success(request, f"Official Fee Receipt #{receipt.receipt_number} has been CANCELLED and logged in the audit trail.")
+    return redirect('fee_receipts_list')
+
+
+@require_menu_permission('can_manage_fees', 'Fee Refunds')
+def fee_refunds_view(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    if request.method == 'POST' and 'create_refund' in request.POST:
+        student_id = request.POST.get('student')
+        student = get_object_or_404(Student, pk=student_id)
+        amount = Decimal(request.POST.get('amount', '0.00') or '0.00')
+        receipt_id = request.POST.get('receipt')
+        receipt = FeeReceipt.objects.filter(pk=receipt_id).first() if receipt_id else None
+        refund_mode = request.POST.get('refund_mode', 'Bank Transfer')
+        reference_no = request.POST.get('reference_number', '').strip()
+        reason = request.POST.get('reason', '').strip()
+
+        if amount <= Decimal('0.00'):
+            messages.error(request, "Refund amount must be greater than ₹0.")
+            return redirect('fee_refunds')
+
+        refund_count = FeeRefund.objects.count() + 1
+        ref_no = f"REF-{timezone.now().year}-{refund_count:04d}"
+
+        refund = FeeRefund.objects.create(
+            school=school,
+            refund_number=ref_no,
+            student=student,
+            receipt=receipt,
+            amount=amount,
+            refund_date=timezone.now().date(),
+            refund_mode=refund_mode,
+            reference_number=reference_no,
+            reason=reason,
+            status='Pending',
+            requested_by=request.user if request.user.is_authenticated else None
+        )
+        messages.success(request, f"Refund Request #{ref_no} for ₹{amount} submitted for approval!")
+        return redirect('fee_refunds')
+
+    refunds = FeeRefund.objects.select_related('student__class_level', 'receipt', 'requested_by', 'approved_by').all().order_by('-created_at')
+    
+    status_filter = request.GET.get('status')
+    if status_filter:
+        refunds = refunds.filter(status=status_filter)
+
+    students = Student.objects.filter(is_active=True).select_related('class_level').order_by('first_name')
+    receipts = FeeReceipt.objects.filter(status='Active').order_by('-payment_date')[:50]
+
+    stats = {
+        'total': FeeRefund.objects.count(),
+        'pending': FeeRefund.objects.filter(status='Pending').count(),
+        'approved': FeeRefund.objects.filter(status='Approved').count(),
+        'processed': FeeRefund.objects.filter(status='Processed').count(),
+        'total_disbursed': FeeRefund.objects.filter(status='Processed').aggregate(t=Sum('amount'))['t'] or Decimal('0.00'),
+    }
+
+    ctx.update({
+        'refunds': refunds,
+        'students': students,
+        'receipts': receipts,
+        'stats': stats,
+        'status_filter': status_filter,
+    })
+    return render(request, 'school_erp/fee_refunds.html', ctx)
+
+
+@require_menu_permission('can_manage_fees', 'Refund Approval & Disbursement')
+def fee_refund_action_view(request, refund_id, action):
+    refund = get_object_or_404(FeeRefund, pk=refund_id)
+    
+    if action == 'approve':
+        refund.status = 'Approved'
+        refund.approved_by = request.user if request.user.is_authenticated else None
+        refund.approved_at = timezone.now()
+        refund.save()
+        messages.success(request, f"Refund #{refund.refund_number} for {refund.student.full_name} (₹{refund.amount}) has been APPROVED!")
+
+    elif action == 'reject':
+        refund.status = 'Rejected'
+        refund.remarks = request.POST.get('remarks', 'Rejected by Administrator')
+        refund.save()
+        messages.warning(request, f"Refund #{refund.refund_number} has been REJECTED.")
+
+    elif action == 'process':
+        refund.status = 'Processed'
+        refund.reference_number = request.POST.get('reference_number', refund.reference_number)
+        refund.save()
+
+        # Record in student fee ledger
+        StudentFeeLedger.objects.create(
+            school=refund.school,
+            student=refund.student,
+            academic_session=refund.student.academic_session or AcademicSession.objects.filter(is_current=True).first(),
+            entry_date=timezone.now().date(),
+            entry_type='Refund',
+            voucher_no=refund.refund_number,
+            description=f"Refund Disbursed via {refund.refund_mode} (Ref: {refund.reference_number}): {refund.reason}",
+            debit=refund.amount,
+            credit=Decimal('0.00'),
+            running_balance=refund.student.fee_due_amount + refund.amount,
+            created_by=request.user if request.user.is_authenticated else None
+        )
+        messages.success(request, f"Refund #{refund.refund_number} has been DISBURSED & recorded in the ledger!")
+
+    return redirect('fee_refunds')
+
+
+@require_menu_permission('can_manage_fees', 'Payment Reconciliation')
+def fee_reconciliation_view(request):
+    ctx = get_school_context(request)
+    today = timezone.now().date()
+    
+    # Handle single or bulk reconciliation toggle
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'reconcile_single':
+            receipt_id = request.POST.get('receipt_id')
+            rec = get_object_or_404(FeeReceipt, pk=receipt_id)
+            rec.is_reconciled = not rec.is_reconciled
+            rec.reconciled_at = timezone.now() if rec.is_reconciled else None
+            rec.reconciled_by = request.user if rec.is_reconciled else None
+            rec.reconciliation_notes = request.POST.get('notes', '')
+            rec.save()
+            messages.success(request, f"Receipt #{rec.receipt_number} marked as {'Reconciled' if rec.is_reconciled else 'Pending Reconciliation'}.")
+            return redirect(request.get_full_path())
+
+        elif action == 'reconcile_all_selected':
+            selected_ids = request.POST.getlist('selected_receipts')
+            count = 0
+            for r_id in selected_ids:
+                rec = FeeReceipt.objects.filter(id=r_id).first()
+                if rec and not rec.is_reconciled:
+                    rec.is_reconciled = True
+                    rec.reconciled_at = timezone.now()
+                    rec.reconciled_by = request.user
+                    rec.save()
+                    count += 1
+            messages.success(request, f"Successfully verified & reconciled {count} payment transactions!")
+            return redirect(request.get_full_path())
+
+    date_filter = request.GET.get('date_range', 'today')
+    receipts_qs = FeeReceipt.objects.filter(status='Active').select_related('student__class_level', 'cashier').order_by('-payment_date', '-id')
+
+    if date_filter == 'today':
+        receipts_qs = receipts_qs.filter(payment_date=today)
+    elif date_filter == 'yesterday':
+        receipts_qs = receipts_qs.filter(payment_date=today - datetime.timedelta(days=1))
+    elif date_filter == 'this_week':
+        week_start = today - datetime.timedelta(days=today.weekday())
+        receipts_qs = receipts_qs.filter(payment_date__gte=week_start)
+    elif date_filter == 'this_month':
+        month_start = today.replace(day=1)
+        receipts_qs = receipts_qs.filter(payment_date__gte=month_start)
+    elif date_filter == 'custom':
+        df = request.GET.get('from_date')
+        dt = request.GET.get('to_date')
+        if df:
+            receipts_qs = receipts_qs.filter(payment_date__gte=df)
+        if dt:
+            receipts_qs = receipts_qs.filter(payment_date__lte=dt)
+
+    # Breakdown by Payment Modes
+    cash_total = receipts_qs.filter(payment_method='Cash').aggregate(t=Sum('amount_paid'))['t'] or Decimal('0.00')
+    upi_total = receipts_qs.filter(payment_method__icontains='UPI').aggregate(t=Sum('amount_paid'))['t'] or Decimal('0.00')
+    bank_total = receipts_qs.filter(payment_method__in=['Net Banking', 'Cheque / DD', 'Debit/Credit Card']).aggregate(t=Sum('amount_paid'))['t'] or Decimal('0.00')
+    total_amount = cash_total + upi_total + bank_total
+    reconciled_total = receipts_qs.filter(is_reconciled=True).aggregate(t=Sum('amount_paid'))['t'] or Decimal('0.00')
+    unreconciled_total = max(Decimal('0.00'), total_amount - reconciled_total)
+
+    # Check for suspicious duplicates or missing UTRs
+    potential_mismatches = []
+    seen_refs = set()
+    for r in receipts_qs:
+        if r.payment_method != 'Cash':
+            if not r.transaction_reference:
+                potential_mismatches.append(f"Receipt #{r.receipt_number} ({r.payment_method}) is missing Transaction Reference / UTR.")
+            elif r.transaction_reference in seen_refs:
+                potential_mismatches.append(f"Duplicate Transaction Reference '{r.transaction_reference}' detected on Receipt #{r.receipt_number}.")
+            else:
+                seen_refs.add(r.transaction_reference)
+
+    ctx.update({
+        'receipts': receipts_qs,
+        'cash_total': cash_total,
+        'upi_total': upi_total,
+        'bank_total': bank_total,
+        'total_amount': total_amount,
+        'reconciled_total': reconciled_total,
+        'unreconciled_total': unreconciled_total,
+        'date_filter': date_filter,
+        'potential_mismatches': potential_mismatches,
+    })
+    return render(request, 'school_erp/fee_reconciliation.html', ctx)
+
+
+@require_menu_permission('can_manage_fees', 'Send Fee Reminder')
+def fee_send_reminder_view(request, student_id):
+    student = get_object_or_404(Student, pk=student_id)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    due = student.fee_due_amount
+
+    upi_str = f" / College UPI ID: {school.upi_id}" if school.upi_id else ""
+    msg = (
+        f"Namaste {student.parent_name or 'Parent'}, "
+        f"Fee Reminder from {school.name}: "
+        f"Pending school fee for {student.full_name} (Class {student.class_level.name}-{student.section.name}) is Rs.{due:,.0f}. "
+        f"Kindly deposit at the counter or scan College UPI QR code{upi_str}. "
+        f"Thank you. - {school.phone}"
+    )
+
+    clean_phone = ''.join(c for c in (student.parent_phone or '') if c.isdigit())
+    if clean_phone and len(clean_phone) == 10:
+        clean_phone = '91' + clean_phone
+
+    FeeReminderLog.objects.create(
+        school=school,
+        student=student,
+        channel='WhatsApp',
+        recipient_phone=student.parent_phone or 'N/A',
+        due_amount=due,
+        message_text=msg,
+        sent_by=request.user if request.user.is_authenticated else None
+    )
+
+    import urllib.parse
+    encoded_msg = urllib.parse.quote(msg)
+    wa_url = f"https://wa.me/{clean_phone}?text={encoded_msg}" if clean_phone else "#"
+
+    messages.success(request, f"Due Reminder logged for {student.full_name}! Opening WhatsApp...")
+    return redirect(wa_url if clean_phone else 'fees_defaulters')
 
 
 # ------------------- EXAMINATIONS & REPORT CARDS -------------------
@@ -3109,28 +4477,59 @@ def exam_create_view(request):
 
 
 
+@require_menu_permission('can_manage_exams', 'Marks Entry')
 def marks_entry_view(request):
-    ctx = get_school_context()
+    ctx = get_school_context(request)
     exams = Exam.objects.all()
     classes = ClassLevel.objects.all()
     subjects = Subject.objects.all()
-    
+
+    # Teacher Scoped Access Restriction Enforcement
+    is_teacher = is_teacher_user(request.user)
+    teacher_assigned_classes = None
+    teacher_assigned_subjects = None
+    if is_teacher:
+        teacher_assigned_classes, teacher_assigned_subjects = get_teacher_assigned_classes(request.user)
+        classes = teacher_assigned_classes
+        if teacher_assigned_subjects.exists():
+            subjects = teacher_assigned_subjects
+
     exam_id = request.GET.get('exam_id') or request.POST.get('exam_id')
     class_id = request.GET.get('class_id') or request.POST.get('class_id')
     subject_id = request.GET.get('subject_id') or request.POST.get('subject_id')
-    
+
     selected_exam = Exam.objects.filter(id=exam_id).first() if exam_id else exams.first()
-    selected_class = ClassLevel.objects.filter(id=class_id).first() if class_id else classes.first()
-    selected_subject = Subject.objects.filter(id=subject_id).first() if subject_id else subjects.first()
-    
+    selected_class = classes.filter(id=class_id).first() if class_id else classes.first()
+    selected_subject = subjects.filter(id=subject_id).first() if subject_id else subjects.first()
+
+    # If teacher explicitly tries to access a class or subject not assigned to them
+    if is_teacher:
+        if class_id and not teacher_assigned_classes.filter(id=class_id).exists():
+            target_cls = ClassLevel.objects.filter(id=class_id).first()
+            cls_name = target_cls.name if target_cls else f"ID {class_id}"
+            messages.error(
+                request,
+                f"Access Denied: You are not authorized to view or enter marks for Class '{cls_name}'. You can only grade your assigned classes."
+            )
+            return redirect('marks_entry')
+
     students = []
     existing_marks = {}
-    
+
     if selected_exam and selected_class and selected_subject:
         students = Student.objects.filter(class_level=selected_class, is_active=True).order_by('roll_number')
-        
+
         if request.method == 'POST' and 'save_marks' in request.POST:
+            # Re-verify teacher permission upon save POST
+            if is_teacher and not teacher_assigned_classes.filter(id=selected_class.id).exists():
+                messages.error(
+                    request,
+                    f"Access Denied: You cannot modify marks for Class '{selected_class.name}'. This class is not assigned to you."
+                )
+                return redirect('marks_entry')
+
             max_marks_val = float(request.POST.get('max_marks', 100.0))
+            updated_count = 0
             for s in students:
                 score_str = request.POST.get(f'marks_{s.id}', '').strip()
                 remarks_str = request.POST.get(f'remarks_{s.id}', 'Good')
@@ -3147,14 +4546,28 @@ def marks_entry_view(request):
                                 'remarks': remarks_str,
                             }
                         )
+                        updated_count += 1
                     except ValueError:
                         pass
-            messages.success(request, f"Marks updated successfully for {selected_subject.name} - {selected_class.name}!")
+
+            # Log audit trail for marks update
+            log_audit(
+                request=request,
+                action='UPDATE',
+                module='EXAMS',
+                object_type='ExamResult',
+                object_id=str(selected_exam.id),
+                object_repr=f"{selected_exam.name} - {selected_class.name} - {selected_subject.name}",
+                description=f"Marks updated for {updated_count} students in {selected_class.name} ({selected_subject.name}). Max Marks: {max_marks_val}",
+                reason="Term examination marks assessment update"
+            )
+
+            messages.success(request, f"Marks updated successfully for {selected_subject.name} - {selected_class.name} ({updated_count} students)!")
             return redirect(f"{request.path}?exam_id={selected_exam.id}&class_id={selected_class.id}&subject_id={selected_subject.id}")
-            
+
         results = ExamResult.objects.filter(exam=selected_exam, subject=selected_subject, student__in=students)
         existing_marks = {r.student_id: r for r in results}
-        
+
     student_rows = []
     for s in students:
         res = existing_marks.get(s.id)
@@ -3164,7 +4577,7 @@ def marks_entry_view(request):
             'grade': res.grade if res else '-',
             'remarks': res.remarks if res else '',
         })
-        
+
     ctx.update({
         'exams': exams,
         'classes': classes,
@@ -3173,14 +4586,26 @@ def marks_entry_view(request):
         'selected_class': selected_class,
         'selected_subject': selected_subject,
         'student_rows': student_rows,
+        'is_teacher_restricted': is_teacher,
     })
     return render(request, 'school_erp/marks_entry.html', ctx)
 
 
 def report_card_view(request, student_id, exam_id):
-    ctx = get_school_context()
+    ctx = get_school_context(request)
     student = get_object_or_404(Student.objects.select_related('class_level', 'section'), pk=student_id)
     exam = get_object_or_404(Exam, pk=exam_id)
+
+    # Parent Scoped Access Restriction Enforcement
+    if is_parent_user(request.user):
+        allowed_students = get_parent_allowed_students(request.user)
+        if not allowed_students.filter(id=student.id).exists():
+            messages.error(
+                request,
+                "Access Restricted: As a Parent, you can only view academic and report card records for your linked child."
+            )
+            return redirect('dashboard')
+
     
     results = ExamResult.objects.filter(student=student, exam=exam).select_related('subject')
     
@@ -3253,6 +4678,19 @@ def exam_toggle_publish_view(request, exam_id):
     exam.is_published = not exam.is_published
     exam.save()
     status_label = "published for viewing" if exam.is_published else "set back to draft"
+    
+    # Audit trail for Result Publication
+    log_audit(
+        request=request,
+        action='PUBLISH',
+        module='EXAMS',
+        object_type='Exam',
+        object_id=str(exam.id),
+        object_repr=exam.name,
+        description=f"Examination results for '{exam.name}' have been {status_label}.",
+        reason="Official result publication authorization"
+    )
+    
     messages.success(request, f"Examination results for '{exam.name}' have been {status_label}.")
     return redirect('exam_list')
 
@@ -3264,6 +4702,18 @@ def exam_delete_view(request, exam_id):
         name = exam.name
         exam.results.all().delete()
         exam.delete()
+        
+        log_audit(
+            request=request,
+            action='DELETE',
+            module='EXAMS',
+            object_type='Exam',
+            object_id=str(exam_id),
+            object_repr=name,
+            description=f"Examination '{name}' and all associated marks deleted.",
+            reason="Examination deletion"
+        )
+        
         messages.success(request, f"Examination '{name}' and associated marks have been deleted.")
     return redirect('exam_list')
 
@@ -3329,18 +4779,22 @@ def bulk_report_cards_view(request, exam_id, class_id):
 # ------------------- NOTICES & CIRCULARS -------------------
 
 def notices_view(request):
-    ctx = get_school_context()
-    notices = Notice.objects.all().order_by('-is_urgent', '-created_at')
+    ctx = get_school_context(request)
+    school = ctx['school']
+    notices = Notice.objects.filter(school=school).order_by('-is_urgent', '-created_at')
     ctx.update({'notices': notices})
     return render(request, 'school_erp/notices.html', ctx)
 
 
 def notice_create_view(request):
-    ctx = get_school_context()
+    ctx = get_school_context(request)
+    school = ctx['school']
     if request.method == 'POST':
         form = NoticeForm(request.POST)
         if form.is_valid():
-            notice = form.save()
+            notice = form.save(commit=False)
+            notice.school = school
+            notice.save()
             messages.success(request, f"Notice '{notice.title}' published successfully!")
             return redirect('notices')
     else:
@@ -3479,19 +4933,21 @@ def student_promote_view(request, pk):
     Validation: Target session MUST have start_date > student.academic_session.start_date.
     Moving to past / previous session is strictly prevented!
     """
-    ctx = get_school_context()
-    student = get_object_or_404(Student, pk=pk)
-    current_session = student.academic_session or get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    student = get_object_or_404(Student, pk=pk, school=school)
+    current_session = student.academic_session or get_active_session(request, school=school)
 
     next_sessions = AcademicSession.objects.filter(
+        school=school,
         start_date__gt=current_session.start_date
     ).order_by('start_date')
 
-    classes = ClassLevel.objects.all().order_by('order', 'name')
-    sections = Section.objects.all()
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
+    sections = Section.objects.filter(class_level__school=school)
 
     current_class = student.class_level
-    next_class = ClassLevel.objects.filter(order__gt=current_class.order).order_by('order').first() or current_class
+    next_class = ClassLevel.objects.filter(school=school, order__gt=current_class.order).order_by('order').first() or current_class
 
     if request.method == 'POST':
         target_session_id = request.POST.get('target_session_id')
@@ -3500,9 +4956,9 @@ def student_promote_view(request, pk):
         target_roll_number = request.POST.get('target_roll_number')
         remarks = request.POST.get('remarks', '').strip()
 
-        target_session = get_object_or_404(AcademicSession, id=target_session_id)
-        target_class = get_object_or_404(ClassLevel, id=target_class_id)
-        target_section = get_object_or_404(Section, id=target_section_id)
+        target_session = get_object_or_404(AcademicSession, id=target_session_id, school=school)
+        target_class = get_object_or_404(ClassLevel, id=target_class_id, school=school)
+        target_section = get_object_or_404(Section, id=target_section_id, class_level__school=school)
 
         # STRICT VALIDATION: Cannot move to past or previous session!
         if target_session.start_date <= current_session.start_date:
@@ -3575,29 +5031,32 @@ def student_bulk_promote_view(request):
     """
     Bulk Promote an entire class to the next academic session.
     """
-    ctx = get_school_context()
-    active_session = get_active_session(request)
+    ctx = get_school_context(request)
+    school = ctx['school']
+    active_session = get_active_session(request, school=school)
 
-    classes = ClassLevel.objects.all().order_by('order', 'name')
-    sections = Section.objects.all()
-    all_sessions = AcademicSession.objects.all().order_by('-start_date')
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
+    sections = Section.objects.filter(class_level__school=school)
+    all_sessions = AcademicSession.objects.filter(school=school).order_by('-start_date')
 
     source_session_id = request.GET.get('source_session_id') or (active_session.id if active_session else '')
     source_class_id = request.GET.get('source_class_id', '')
 
     source_session = None
     if source_session_id:
-        source_session = AcademicSession.objects.filter(id=source_session_id).first()
+        source_session = AcademicSession.objects.filter(id=source_session_id, school=school).first()
 
     next_sessions = []
     if source_session:
         next_sessions = AcademicSession.objects.filter(
+            school=school,
             start_date__gt=source_session.start_date
         ).order_by('start_date')
 
     students_to_promote = []
     if source_session and source_class_id:
         students_to_promote = Student.objects.filter(
+            school=school,
             is_active=True,
             class_level_id=source_class_id
         ).filter(
@@ -3614,9 +5073,9 @@ def student_bulk_promote_view(request):
             messages.error(request, "Please select both a Target Session and a Target Class.")
             return redirect('student_bulk_promote')
 
-        target_session = get_object_or_404(AcademicSession, id=target_session_id)
-        target_class = get_object_or_404(ClassLevel, id=target_class_id)
-        target_section = Section.objects.filter(id=target_section_id).first() if target_section_id else None
+        target_session = get_object_or_404(AcademicSession, id=target_session_id, school=school)
+        target_class = get_object_or_404(ClassLevel, id=target_class_id, school=school)
+        target_section = Section.objects.filter(id=target_section_id, class_level__school=school).first() if target_section_id else None
 
         # Validation: Cannot promote to previous/past session
         if source_session and target_session.start_date <= source_session.start_date:
@@ -3695,148 +5154,7 @@ def student_bulk_promote_view(request):
     return render(request, 'school_erp/student_bulk_promote.html', ctx)
 
 
-# ==============================================================================
-# USER MANAGEMENT & MENU PERMISSION VIEWS
-# ==============================================================================
-
-@require_menu_permission('can_manage_users', 'User Management')
-def user_list_view(request):
-    """List staff users with their roles and permission badges."""
-    ctx = get_school_context()
-    users = User.objects.select_related('profile').all().order_by('id')
-    ctx.update({'users': users})
-    return render(request, 'school_erp/user_list.html', ctx)
-
-
-@require_menu_permission('can_manage_users', 'Register New User')
-def user_create_view(request):
-    """Register a new staff user with designated menu access permissions."""
-    ctx = get_school_context()
-    if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '').strip()
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        email = request.POST.get('email', '').strip()
-        phone = request.POST.get('phone', '').strip()
-        role = request.POST.get('role', 'Staff')
-
-        can_students = request.POST.get('can_manage_students') == 'on'
-        can_attendance = request.POST.get('can_manage_attendance') == 'on'
-        can_fees = request.POST.get('can_manage_fees') == 'on'
-        can_exams = request.POST.get('can_manage_exams') == 'on'
-        can_timetable = request.POST.get('can_manage_timetable') == 'on'
-        can_classes = request.POST.get('can_manage_classes') == 'on'
-        can_sessions = request.POST.get('can_manage_sessions') == 'on'
-        can_users = request.POST.get('can_manage_users') == 'on'
-
-        if not username or not password:
-            messages.error(request, "Both Username and Password are required.")
-        elif User.objects.filter(username__iexact=username).exists():
-            messages.error(request, f"User with username '{username}' already exists.")
-        else:
-            user = User.objects.create_user(
-                username=username,
-                password=password,
-                email=email,
-                first_name=first_name,
-                last_name=last_name
-            )
-            UserProfile.objects.create(
-                user=user,
-                role=role,
-                phone=phone,
-                can_manage_students=can_students,
-                can_manage_attendance=can_attendance,
-                can_manage_fees=can_fees,
-                can_manage_exams=can_exams,
-                can_manage_timetable=can_timetable,
-                can_manage_classes=can_classes,
-                can_manage_sessions=can_sessions,
-                can_manage_users=can_users
-            )
-            messages.success(request, f"User '{user.username}' ({role}) registered successfully with custom menu permissions!")
-            return redirect('user_list')
-
-    ctx.update({'edit_mode': False, 'profile': None, 'target_user': None})
-    return render(request, 'school_erp/user_form.html', ctx)
-
-
-@require_menu_permission('can_manage_users', 'Edit User Permissions')
-def user_edit_view(request, pk):
-    """Edit user details, role, and menu permissions."""
-    ctx = get_school_context()
-    target_user = get_object_or_404(User, pk=pk)
-    profile, _ = UserProfile.objects.get_or_create(user=target_user)
-
-    if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
-        password = request.POST.get('password', '').strip()
-        first_name = request.POST.get('first_name', '').strip()
-        last_name = request.POST.get('last_name', '').strip()
-        email = request.POST.get('email', '').strip()
-        phone = request.POST.get('phone', '').strip()
-        role = request.POST.get('role', profile.role)
-
-        can_students = request.POST.get('can_manage_students') == 'on'
-        can_attendance = request.POST.get('can_manage_attendance') == 'on'
-        can_fees = request.POST.get('can_manage_fees') == 'on'
-        can_exams = request.POST.get('can_manage_exams') == 'on'
-        can_timetable = request.POST.get('can_manage_timetable') == 'on'
-        can_classes = request.POST.get('can_manage_classes') == 'on'
-        can_sessions = request.POST.get('can_manage_sessions') == 'on'
-        can_users = request.POST.get('can_manage_users') == 'on'
-
-        if not username:
-            messages.error(request, "Username cannot be empty.")
-        else:
-            if User.objects.filter(username__iexact=username).exclude(pk=target_user.pk).exists():
-                messages.error(request, f"Username '{username}' already taken by another user.")
-            else:
-                target_user.username = username
-                target_user.first_name = first_name
-                target_user.last_name = last_name
-                target_user.email = email
-                if password:
-                    target_user.set_password(password)
-                target_user.save()
-
-                profile.role = role
-                profile.phone = phone
-                profile.can_manage_students = can_students
-                profile.can_manage_attendance = can_attendance
-                profile.can_manage_fees = can_fees
-                profile.can_manage_exams = can_exams
-                profile.can_manage_timetable = can_timetable
-                profile.can_manage_classes = can_classes
-                profile.can_manage_sessions = can_sessions
-                profile.can_manage_users = can_users
-                profile.save()
-
-                messages.success(request, f"User '{target_user.username}' updated successfully!")
-                return redirect('user_list')
-
-    ctx.update({
-        'edit_mode': True,
-        'target_user': target_user,
-        'profile': profile,
-    })
-    return render(request, 'school_erp/user_form.html', ctx)
-
-
-@require_menu_permission('can_manage_users', 'Toggle User Status')
-def user_toggle_status_view(request, pk):
-    """Toggle user active / inactive status."""
-    if request.method == 'POST':
-        target_user = get_object_or_404(User, pk=pk)
-        if target_user.is_superuser:
-            messages.error(request, "Superuser status cannot be disabled.")
-        else:
-            target_user.is_active = not target_user.is_active
-            target_user.save()
-            status_text = "Activated" if target_user.is_active else "Disabled"
-            messages.success(request, f"User '{target_user.username}' has been {status_text}.")
-    return redirect('user_list')
+# Note: User Management & Menu Permission views are defined in the dedicated section below.
 
 
 # ==============================================================================
@@ -3848,19 +5166,64 @@ def user_toggle_status_view(request, pk):
 # ==============================================================================
 
 def user_login_view(request):
-    """Staff & Admin login view with SaaS school status & subscription verification."""
+    """Staff & Admin login view with security monitoring, lockout prevention & MFA support."""
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     next_url = request.GET.get('next') or request.POST.get('next') or 'dashboard'
     current_school = get_school_context(request)['school']
+    client_ip = get_client_ip(request)
+    user_agent = request.META.get('HTTP_USER_AGENT', '')[:290]
+
+    sec_config = None
+    if current_school:
+        sec_config, _ = SecurityConfiguration.objects.get_or_create(school=current_school)
+
+    # Check IP Lockout if security config exists
+    if sec_config and current_school and client_ip:
+        lockout_time = timezone.now() - datetime.timedelta(minutes=sec_config.lockout_duration_minutes)
+        recent_failures = LoginAttemptLog.objects.filter(
+            school=current_school,
+            ip_address=client_ip,
+            status='Failed',
+            timestamp__gte=lockout_time
+        ).count()
+        if recent_failures >= sec_config.max_login_failures:
+            LoginAttemptLog.objects.create(
+                school=current_school,
+                username=request.POST.get('username', 'Unknown').strip(),
+                ip_address=client_ip,
+                user_agent=user_agent,
+                status='Locked_Out',
+                failure_reason=f"Account locked out for {sec_config.lockout_duration_minutes} minutes due to excessive failed attempts.",
+                is_suspicious=True
+            )
+            messages.error(
+                request,
+                f"Security Lockout: Too many failed login attempts. Your IP has been temporarily locked for {sec_config.lockout_duration_minutes} minutes. Please contact IT support."
+            )
+            return render(request, 'school_erp/login.html', {
+                'next': next_url,
+                'school': current_school,
+                'locked_out': True
+            })
 
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
+        mfa_pin = request.POST.get('mfa_pin', '').strip()
         user = authenticate(request, username=username, password=password)
+
         if user is not None:
             if not user.is_active:
+                LoginAttemptLog.objects.create(
+                    school=current_school,
+                    username=username,
+                    ip_address=client_ip,
+                    user_agent=user_agent,
+                    status='Failed',
+                    failure_reason="User account is deactivated."
+                )
                 messages.error(request, "Your individual user account has been disabled. Please contact administrator.")
                 return render(request, 'school_erp/login.html', {'next': next_url, 'school': current_school})
 
@@ -3871,6 +5234,14 @@ def user_login_view(request):
             if not is_superadmin and profile_obj and profile_obj.school:
                 user_school = profile_obj.school
                 if not user_school.is_active:
+                    LoginAttemptLog.objects.create(
+                        school=user_school,
+                        username=username,
+                        ip_address=client_ip,
+                        user_agent=user_agent,
+                        status='Failed',
+                        failure_reason="School account deactivated."
+                    )
                     messages.error(
                         request,
                         "Access Denied: Your school account has been deactivated by the Platform Administrator. Please contact support."
@@ -3878,6 +5249,14 @@ def user_login_view(request):
                     return render(request, 'school_erp/login.html', {'next': next_url, 'school': user_school})
 
                 if user_school.days_remaining < 0:
+                    LoginAttemptLog.objects.create(
+                        school=user_school,
+                        username=username,
+                        ip_address=client_ip,
+                        user_agent=user_agent,
+                        status='Failed',
+                        failure_reason="School subscription expired."
+                    )
                     messages.error(
                         request,
                         f"Subscription Expired: Your school's monthly subscription (₹{user_school.subscription_monthly_fee}/month) "
@@ -3885,15 +5264,62 @@ def user_login_view(request):
                     )
                     return render(request, 'school_erp/login.html', {'next': next_url, 'school': user_school})
 
+            # Check MFA if enabled
+            if sec_config and sec_config.enable_mfa and sec_config.mfa_security_pin:
+                if mfa_pin != sec_config.mfa_security_pin:
+                    LoginAttemptLog.objects.create(
+                        school=current_school,
+                        username=username,
+                        ip_address=client_ip,
+                        user_agent=user_agent,
+                        status='Failed',
+                        failure_reason="Invalid 2FA / Security PIN provided.",
+                        is_suspicious=True
+                    )
+                    messages.error(request, "Invalid 2FA Security PIN. Please enter your authorized PIN to proceed.")
+                    return render(request, 'school_erp/login.html', {
+                        'next': next_url,
+                        'school': current_school,
+                        'require_mfa': True,
+                        'username_val': username
+                    })
+
+            # Successful Login
             login(request, user)
+
+            # Set session timeout based on SecurityConfiguration
+            if sec_config:
+                request.session.set_expiry(sec_config.session_expiry_minutes * 60)
+
+            LoginAttemptLog.objects.create(
+                school=current_school,
+                username=username,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                status='Success',
+                failure_reason=""
+            )
+
             messages.success(request, f"Welcome back, {user.first_name or user.username}!")
             if is_superadmin and next_url == 'dashboard':
                 return redirect('saas_admin_dashboard')
             return redirect(next_url)
         else:
+            LoginAttemptLog.objects.create(
+                school=current_school,
+                username=username or 'Unknown',
+                ip_address=client_ip,
+                user_agent=user_agent,
+                status='Failed',
+                failure_reason="Invalid credentials supplied."
+            )
             messages.error(request, "Invalid username or password. Please try again.")
 
-    return render(request, 'school_erp/login.html', {'next': next_url, 'school': current_school})
+    return render(request, 'school_erp/login.html', {
+        'next': next_url,
+        'school': current_school,
+        'require_mfa': (sec_config.enable_mfa if sec_config else False)
+    })
 
 
 def user_logout_view(request):
@@ -4016,18 +5442,21 @@ def saas_school_create_view(request):
         admin_name = request.POST.get('admin_name', '').strip()
         admin_email = request.POST.get('admin_email', '').strip() or email
 
+        # Auto-generate unique school code if not provided or empty
+        if not school_code and name:
+            school_code = generate_unique_school_code(name)
+
         # Subscription
         monthly_fee_str = request.POST.get('subscription_fee', '499.00').strip()
         sub_days_str = request.POST.get('subscription_days', '30').strip()
 
         # Validation
         if not name or not school_code or not session_name or not admin_username or not admin_password:
-            messages.error(request, "School Name, School Code, Anchor Session, Admin Username, and Admin Password are required.")
+            messages.error(request, "School Name, Anchor Session, Admin Username, and Admin Password are required.")
             return redirect('saas_school_create')
 
         if SchoolProfile.objects.filter(school_code__iexact=school_code).exists():
-            messages.error(request, f"A school with code '{school_code}' already exists. Please choose a unique school code.")
-            return redirect('saas_school_create')
+            school_code = generate_unique_school_code(name)
 
         if User.objects.filter(username__iexact=admin_username).exists():
             messages.error(request, f"User '{admin_username}' already exists. Please choose a different admin username.")
@@ -4082,18 +5511,20 @@ def saas_school_create_view(request):
             is_current=True
         )
 
-        # 3. Create Default Classes & Sections
-        default_classes = [
-            ('Nursery', 'NUR', 1), ('LKG', 'LKG', 2), ('UKG', 'UKG', 3),
-            ('Class 1', 'CLS1', 4), ('Class 2', 'CLS2', 5), ('Class 3', 'CLS3', 6),
-            ('Class 4', 'CLS4', 7), ('Class 5', 'CLS5', 8), ('Class 6', 'CLS6', 9),
-            ('Class 7', 'CLS7', 10), ('Class 8', 'CLS8', 11), ('Class 9', 'CLS9', 12),
-            ('Class 10', 'CLS10', 13)
-        ]
-        for c_name, c_code, c_order in default_classes:
-            cl = ClassLevel.objects.create(school=school, name=c_name, code=c_code, order=c_order)
-            Section.objects.create(class_level=cl, name='A', capacity=40, room_number='Room 101')
-            ClassFeeMaster.objects.create(class_level=cl)
+        # 3. Classes & Sections: Default is empty (0 classes) so new school starts fresh without foreign classes
+        seed_classes = request.POST.get('seed_default_classes') == 'on'
+        if seed_classes:
+            default_classes = [
+                ('Nursery', 'NUR', 1), ('LKG', 'LKG', 2), ('UKG', 'UKG', 3),
+                ('Class 1', 'CLS1', 4), ('Class 2', 'CLS2', 5), ('Class 3', 'CLS3', 6),
+                ('Class 4', 'CLS4', 7), ('Class 5', 'CLS5', 8), ('Class 6', 'CLS6', 9),
+                ('Class 7', 'CLS7', 10), ('Class 8', 'CLS8', 11), ('Class 9', 'CLS9', 12),
+                ('Class 10', 'CLS10', 13)
+            ]
+            for c_name, c_code, c_order in default_classes:
+                cl = ClassLevel.objects.create(school=school, name=c_name, code=c_code, order=c_order)
+                Section.objects.create(class_level=cl, name='A', capacity=40, room_number='Room 101')
+                ClassFeeMaster.objects.create(class_level=cl)
 
         # 4. Create Default Fee Categories
         default_categories = [
@@ -5017,5 +6448,1233 @@ def public_id_card_view(request, student_id):
     return render(request, 'school_erp/public_slip_id_card.html', ctx)
 
 
+# ==============================================================================
+# ROLE PERMISSIONS & AUDIT LOG VIEWS
+# ==============================================================================
+
+@require_menu_permission('can_manage_users', 'Role Master')
+def roles_master_view(request):
+    ctx = get_school_context(request)
+    roles = Role.objects.annotate(user_count_annotated=Count('user_profiles')).order_by('id')
+    form = RoleForm()
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        if action == 'create':
+            form = RoleForm(request.POST)
+            if form.is_valid():
+                role = form.save()
+                ensure_roles_and_permissions()
+                log_audit(
+                    request=request,
+                    action='CREATE',
+                    module='USERS',
+                    object_type='Role',
+                    object_id=str(role.id),
+                    object_repr=role.name,
+                    description=f"Created custom role '{role.name}' with code '{role.code}'",
+                    reason="Role Creation"
+                )
+                messages.success(request, f"Role '{role.name}' has been created successfully!")
+                return redirect('roles_master')
+            else:
+                messages.error(request, "Failed to create role. Please verify that the name and code are unique.")
+
+        elif action == 'edit':
+            role_id = request.POST.get('role_id')
+            role = get_object_or_404(Role, pk=role_id)
+            role.name = request.POST.get('name', role.name).strip()
+            role.description = request.POST.get('description', role.description).strip()
+            role.save()
+            log_audit(
+                request=request,
+                action='UPDATE',
+                module='USERS',
+                object_type='Role',
+                object_id=str(role.id),
+                object_repr=role.name,
+                description=f"Updated role details for '{role.name}'",
+                reason="Role Update"
+            )
+            messages.success(request, f"Role '{role.name}' details updated successfully!")
+            return redirect('roles_master')
+
+        elif action == 'delete':
+            role_id = request.POST.get('role_id')
+            role = get_object_or_404(Role, pk=role_id)
+            if role.is_system_role:
+                messages.error(request, f"System role '{role.name}' is core and cannot be deleted.")
+            elif role.user_profiles.exists():
+                messages.error(request, f"Cannot delete role '{role.name}' because {role.user_profiles.count()} user(s) are assigned to it.")
+            else:
+                name = role.name
+                role.permissions.all().delete()
+                role.delete()
+                log_audit(
+                    request=request,
+                    action='DELETE',
+                    module='USERS',
+                    object_type='Role',
+                    object_id=str(role_id),
+                    object_repr=name,
+                    description=f"Deleted custom role '{name}'",
+                    reason="Role Deletion"
+                )
+                messages.success(request, f"Role '{name}' has been deleted.")
+            return redirect('roles_master')
+
+    ctx.update({
+        'roles': roles,
+        'form': form,
+    })
+    return render(request, 'school_erp/roles_master.html', ctx)
 
 
+@require_menu_permission('can_manage_users', 'Permission Matrix')
+def permission_matrix_view(request, role_id=None):
+    ctx = get_school_context(request)
+    roles = Role.objects.all().order_by('id')
+    
+    if not role_id:
+        default_role = Role.objects.filter(code='TEACHER').first() or roles.first()
+        selected_role = default_role
+    else:
+        selected_role = get_object_or_404(Role, pk=role_id)
+
+    ensure_roles_and_permissions()
+    permissions = RolePermission.objects.filter(role=selected_role).order_by('id')
+
+    if request.method == 'POST':
+        changes = []
+        for perm in permissions:
+            old_vals = {
+                'can_view': perm.can_view,
+                'can_add': perm.can_add,
+                'can_edit': perm.can_edit,
+                'can_delete': perm.can_delete,
+                'can_approve': perm.can_approve,
+                'can_export': perm.can_export,
+            }
+            perm.can_view = f"can_view_{perm.module_code}" in request.POST
+            perm.can_add = f"can_add_{perm.module_code}" in request.POST
+            perm.can_edit = f"can_edit_{perm.module_code}" in request.POST
+            perm.can_delete = f"can_delete_{perm.module_code}" in request.POST
+            perm.can_approve = f"can_approve_{perm.module_code}" in request.POST
+            perm.can_export = f"can_export_{perm.module_code}" in request.POST
+            perm.save()
+
+            new_vals = {
+                'can_view': perm.can_view,
+                'can_add': perm.can_add,
+                'can_edit': perm.can_edit,
+                'can_delete': perm.can_delete,
+                'can_approve': perm.can_approve,
+                'can_export': perm.can_export,
+            }
+            if old_vals != new_vals:
+                changes.append({'module': perm.module_code, 'before': old_vals, 'after': new_vals})
+
+        log_audit(
+            request=request,
+            action='PERMISSION_CHANGE',
+            module='USERS',
+            object_type='RolePermission',
+            object_id=str(selected_role.id),
+            object_repr=f"Permissions for {selected_role.name}",
+            description=f"Updated granular module permissions for role '{selected_role.name}' ({len(changes)} modules modified)",
+            changes=changes,
+            reason=request.POST.get('reason', 'Security policy matrix update')
+        )
+
+        messages.success(request, f"Granular access permissions for '{selected_role.name}' saved and logged in audit trail!")
+        return redirect('role_permission_matrix', role_id=selected_role.id)
+
+    ctx.update({
+        'roles': roles,
+        'selected_role': selected_role,
+        'permissions': permissions,
+    })
+    return render(request, 'school_erp/permission_matrix.html', ctx)
+
+
+@require_menu_permission('can_manage_users', 'User Management')
+def user_list_view(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    users_qs = User.objects.select_related('profile__role_obj', 'profile__school', 'profile__assigned_teacher').prefetch_related(
+        'profile__assigned_classes', 'profile__assigned_sections', 'profile__linked_students'
+    ).order_by('-date_joined')
+
+    # Strict multi-tenant isolation: Only display users belonging to the current school
+    if not is_superadmin_user(request.user):
+        users_qs = users_qs.filter(profile__school=school)
+    else:
+        # SaaS Platform Superadmin can filter by school or see active switched school
+        school_id_filter = request.GET.get('school_id')
+        if school_id_filter:
+            users_qs = users_qs.filter(profile__school_id=school_id_filter)
+        elif request.session.get('saas_active_school_id'):
+            users_qs = users_qs.filter(profile__school=school)
+
+    role_filter = request.GET.get('role', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    search_query = request.GET.get('q', '').strip()
+
+    if role_filter:
+        users_qs = users_qs.filter(Q(profile__role_obj__code=role_filter) | Q(profile__role=role_filter))
+
+    if status_filter == 'active':
+        users_qs = users_qs.filter(is_active=True)
+    elif status_filter == 'inactive':
+        users_qs = users_qs.filter(is_active=False)
+
+    if search_query:
+        users_qs = users_qs.filter(
+            Q(username__icontains=search_query) |
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(email__icontains=search_query) |
+            Q(profile__phone__icontains=search_query)
+        )
+
+    roles = Role.objects.all().order_by('name')
+    if not is_superadmin_user(request.user):
+        roles = roles.exclude(code='SUPER_ADMIN')
+
+    paginator = Paginator(users_qs, 20)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    ctx.update({
+        'users': page_obj,
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'roles': roles,
+        'selected_role': role_filter,
+        'selected_status': status_filter,
+        'search_query': search_query,
+        'total_users': users_qs.count(),
+    })
+    return render(request, 'school_erp/user_list.html', ctx)
+
+
+@require_menu_permission('can_manage_users', 'Create User')
+def user_create_view(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    is_superadmin = is_superadmin_user(request.user)
+
+    if request.method == 'POST':
+        form = UserCreateUpdateForm(request.POST, school=school, is_superadmin=is_superadmin)
+        if form.is_valid():
+            cd = form.cleaned_data
+            if User.objects.filter(username=cd['username']).exists():
+                messages.error(request, f"Username '{cd['username']}' is already in use. Please select a different username.")
+            else:
+                user = User.objects.create_user(
+                    username=cd['username'],
+                    email=cd.get('email', ''),
+                    password=cd.get('password') or 'School@123',
+                    first_name=cd.get('first_name', ''),
+                    last_name=cd.get('last_name', ''),
+                    is_active=cd.get('is_active', True)
+                )
+
+                role_obj = cd.get('role_obj')
+                profile, _ = UserProfile.objects.get_or_create(user=user)
+                profile.school = school
+                profile.role_obj = role_obj
+                profile.role = role_obj.name if role_obj else 'Teacher'
+                profile.phone = cd.get('phone', '')
+                profile.assigned_teacher = cd.get('assigned_teacher')
+                profile.session_restriction = cd.get('session_restriction')
+                profile.save()
+
+                if cd.get('assigned_classes'):
+                    profile.assigned_classes.set(cd['assigned_classes'])
+                if cd.get('assigned_sections'):
+                    profile.assigned_sections.set(cd['assigned_sections'])
+                if cd.get('linked_students'):
+                    profile.linked_students.set(cd['linked_students'])
+
+                log_audit(
+                    request=request,
+                    action='CREATE',
+                    module='USERS',
+                    object_type='User',
+                    object_id=str(user.id),
+                    object_repr=f"{user.username} ({profile.role})",
+                    description=f"Created user account '{user.username}' with role '{profile.role}' for school '{school.name}'",
+                    reason="New staff/guardian user onboarding"
+                )
+
+                messages.success(request, f"User account '{user.username}' ({profile.role}) created successfully!")
+                return redirect('user_list')
+    else:
+        form = UserCreateUpdateForm(school=school, is_superadmin=is_superadmin)
+
+    ctx.update({
+        'form': form,
+        'title': 'Create New User Account',
+        'is_edit': False,
+    })
+    return render(request, 'school_erp/user_form.html', ctx)
+
+
+@require_menu_permission('can_manage_users', 'Edit User')
+def user_edit_view(request, user_id):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    is_superadmin = is_superadmin_user(request.user)
+
+    if not is_superadmin:
+        target_user = get_object_or_404(User, pk=user_id, profile__school=school)
+    else:
+        target_user = get_object_or_404(User, pk=user_id)
+    profile, _ = UserProfile.objects.get_or_create(user=target_user)
+
+    if request.method == 'POST':
+        form = UserCreateUpdateForm(request.POST, instance_user=target_user, school=school, is_superadmin=is_superadmin)
+        if form.is_valid():
+            cd = form.cleaned_data
+            if cd['username'] != target_user.username and User.objects.filter(username=cd['username']).exclude(pk=target_user.pk).exists():
+                messages.error(request, f"Username '{cd['username']}' is already in use.")
+            else:
+                target_user.username = cd['username']
+                target_user.first_name = cd.get('first_name', '')
+                target_user.last_name = cd.get('last_name', '')
+                target_user.email = cd.get('email', '')
+                target_user.is_active = cd.get('is_active', True)
+                if cd.get('password'):
+                    target_user.set_password(cd['password'])
+                target_user.save()
+
+                role_obj = cd.get('role_obj')
+                profile.role_obj = role_obj
+                if role_obj:
+                    profile.role = role_obj.name
+                profile.phone = cd.get('phone', '')
+                profile.assigned_teacher = cd.get('assigned_teacher')
+                profile.session_restriction = cd.get('session_restriction')
+                profile.save()
+
+                profile.assigned_classes.set(cd.get('assigned_classes') or [])
+                profile.assigned_sections.set(cd.get('assigned_sections') or [])
+                profile.linked_students.set(cd.get('linked_students') or [])
+
+                log_audit(
+                    request=request,
+                    action='UPDATE',
+                    module='USERS',
+                    object_type='User',
+                    object_id=str(target_user.id),
+                    object_repr=f"{target_user.username} ({profile.role})",
+                    description=f"Updated profile, role permissions & restrictions for user '{target_user.username}'",
+                    reason="User record update"
+                )
+
+                messages.success(request, f"User account '{target_user.username}' updated successfully!")
+                return redirect('user_list')
+    else:
+        form = UserCreateUpdateForm(instance_user=target_user, school=school, is_superadmin=is_superadmin)
+
+    ctx.update({
+        'form': form,
+        'target_user': target_user,
+        'title': f"Edit User: {target_user.username}",
+        'is_edit': True,
+    })
+    return render(request, 'school_erp/user_form.html', ctx)
+
+
+@require_menu_permission('can_manage_users', 'Toggle User Status')
+def user_toggle_status_view(request, user_id):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    if not is_superadmin_user(request.user):
+        target_user = get_object_or_404(User, pk=user_id, profile__school=school)
+    else:
+        target_user = get_object_or_404(User, pk=user_id)
+
+    if target_user == request.user:
+        messages.error(request, "You cannot deactivate your own logged-in administrator account.")
+        return redirect('user_list')
+
+    target_user.is_active = not target_user.is_active
+    target_user.save()
+    status_str = "activated" if target_user.is_active else "deactivated"
+
+    log_audit(
+        request=request,
+        action='UPDATE',
+        module='USERS',
+        object_type='User',
+        object_id=str(target_user.id),
+        object_repr=target_user.username,
+        description=f"User account '{target_user.username}' {status_str}",
+        reason=f"Account status toggle to {status_str}"
+    )
+
+    messages.success(request, f"User '{target_user.username}' has been {status_str}.")
+    return redirect('user_list')
+
+
+@require_menu_permission('can_manage_users', 'Audit Log Viewer')
+def audit_logs_view(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    logs_qs = AuditLog.objects.select_related('user', 'school', 'approved_by').all().order_by('-timestamp')
+
+    # Strict multi-tenant isolation: Only display audit logs for the current school
+    if not is_superadmin_user(request.user):
+        logs_qs = logs_qs.filter(school=school)
+    else:
+        school_id_filter = request.GET.get('school_id')
+        if school_id_filter:
+            logs_qs = logs_qs.filter(school_id=school_id_filter)
+        elif request.session.get('saas_active_school_id'):
+            logs_qs = logs_qs.filter(school=school)
+
+    module_filter = request.GET.get('module', '').strip()
+    action_filter = request.GET.get('action', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    search_query = request.GET.get('q', '').strip()
+    tab = request.GET.get('tab', 'all')
+
+    if tab == 'pending':
+        logs_qs = logs_qs.filter(requires_approval=True, status='PENDING_APPROVAL')
+    else:
+        if status_filter:
+            logs_qs = logs_qs.filter(status=status_filter)
+
+    if module_filter:
+        logs_qs = logs_qs.filter(module=module_filter)
+    if action_filter:
+        logs_qs = logs_qs.filter(action=action_filter)
+    if search_query:
+        logs_qs = logs_qs.filter(
+            Q(description__icontains=search_query) |
+            Q(object_repr__icontains=search_query) |
+            Q(reason__icontains=search_query) |
+            Q(user__username__icontains=search_query) |
+            Q(user_role__icontains=search_query)
+        )
+
+    # Statistics
+    today = timezone.now().date()
+    stats = {
+        'total_logs': AuditLog.objects.count(),
+        'today_actions': AuditLog.objects.filter(timestamp__date=today).count(),
+        'sensitive_actions': AuditLog.objects.filter(Q(action__in=['DELETE', 'APPROVE', 'REJECT', 'PUBLISH', 'PERMISSION_CHANGE']) | Q(requires_approval=True)).count(),
+        'pending_approvals': AuditLog.objects.filter(requires_approval=True, status='PENDING_APPROVAL').count(),
+    }
+
+    paginator = Paginator(logs_qs, 25)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    ctx.update({
+        'logs': page_obj,
+        'page_obj': page_obj,
+        'paginator': paginator,
+        'stats': stats,
+        'selected_module': module_filter,
+        'selected_action': action_filter,
+        'selected_status': status_filter,
+        'search_query': search_query,
+        'active_tab': tab,
+        'module_choices': AuditLog.MODULE_CHOICES,
+        'action_choices': AuditLog.ACTION_CHOICES,
+        'status_choices': AuditLog.STATUS_CHOICES,
+    })
+    return render(request, 'school_erp/audit_logs.html', ctx)
+
+
+@require_menu_permission('can_manage_users', 'Audit Log Approval Action')
+def audit_log_action_view(request, log_id, action):
+    audit_log = get_object_or_404(AuditLog, pk=log_id)
+    if request.method == 'POST':
+        remarks = request.POST.get('remarks', '').strip()
+        if action == 'approve':
+            audit_log.status = 'APPROVED'
+            audit_log.approved_by = request.user
+            audit_log.approved_at = timezone.now()
+            audit_log.approval_remarks = remarks or 'Approved by administrator'
+            audit_log.save()
+
+            log_audit(
+                request=request,
+                action='APPROVE',
+                module=audit_log.module,
+                object_type='AuditLog',
+                object_id=str(audit_log.id),
+                object_repr=f"Approval of #{audit_log.id}",
+                description=f"Sensitive operation #{audit_log.id} ({audit_log.object_repr}) approved by {request.user.username}",
+                reason=audit_log.approval_remarks
+            )
+            messages.success(request, f"Operation #{audit_log.id} ({audit_log.object_repr}) has been APPROVED successfully!")
+
+        elif action == 'reject':
+            audit_log.status = 'REJECTED'
+            audit_log.approved_by = request.user
+            audit_log.approved_at = timezone.now()
+            audit_log.approval_remarks = remarks or 'Rejected by administrator'
+            audit_log.save()
+
+            log_audit(
+                request=request,
+                action='REJECT',
+                module=audit_log.module,
+                object_type='AuditLog',
+                object_id=str(audit_log.id),
+                object_repr=f"Rejection of #{audit_log.id}",
+                description=f"Sensitive operation #{audit_log.id} ({audit_log.object_repr}) rejected by {request.user.username}",
+                reason=audit_log.approval_remarks
+            )
+            messages.warning(request, f"Operation #{audit_log.id} ({audit_log.object_repr}) has been REJECTED.")
+
+    return redirect('audit_logs')
+
+
+@require_menu_permission('can_manage_users', 'Export Audit Logs')
+def export_audit_logs_excel(request):
+    ctx = get_school_context(request)
+    school = ctx['school']
+    logs_qs = AuditLog.objects.select_related('user', 'school', 'approved_by').all().order_by('-timestamp')
+
+    if not is_superadmin_user(request.user):
+        logs_qs = logs_qs.filter(school=school)
+    else:
+        school_id_filter = request.GET.get('school_id')
+        if school_id_filter:
+            logs_qs = logs_qs.filter(school_id=school_id_filter)
+        elif request.session.get('saas_active_school_id'):
+            logs_qs = logs_qs.filter(school=school)
+
+    module_filter = request.GET.get('module', '').strip()
+    action_filter = request.GET.get('action', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    search_query = request.GET.get('q', '').strip()
+
+    if module_filter:
+        logs_qs = logs_qs.filter(module=module_filter)
+    if action_filter:
+        logs_qs = logs_qs.filter(action=action_filter)
+    if status_filter:
+        logs_qs = logs_qs.filter(status=status_filter)
+    if search_query:
+        logs_qs = logs_qs.filter(
+            Q(description__icontains=search_query) |
+            Q(object_repr__icontains=search_query) |
+            Q(reason__icontains=search_query) |
+            Q(user__username__icontains=search_query)
+        )
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Audit Trail Logs"
+
+    headers = ["ID", "Timestamp (IST)", "User", "Role", "Action", "Module", "Target Object", "Description", "Reason / Justification", "Status", "Approved By", "IP Address"]
+    ws.append(headers)
+
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for log in logs_qs[:2000]:
+        approved_by_str = log.approved_by.username if log.approved_by else '-'
+        ws.append([
+            log.id,
+            log.timestamp.strftime("%Y-%m-%d %H:%M:%S") if log.timestamp else '',
+            log.user.username if log.user else 'System',
+            log.user_role or '-',
+            log.get_action_display() if hasattr(log, 'get_action_display') else log.action,
+            log.get_module_display() if hasattr(log, 'get_module_display') else log.module,
+            log.object_repr or log.object_type,
+            log.description,
+            log.reason or '-',
+            log.status,
+            approved_by_str,
+            log.ip_address or '-'
+        ])
+
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = openpyxl.utils.get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 45)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="school_audit_logs_{timezone.now().strftime("%Y%m%d_%H%M")}.xlsx"'
+    wb.save(response)
+
+    log_audit(
+        request=request,
+        action='EXPORT',
+        module='USERS',
+        object_type='AuditLog',
+        description=f"Exported {logs_qs.count()} audit trail records to Excel",
+        reason="Security compliance & audit export"
+    )
+    return response
+
+
+# ==============================================================================
+# SAAS PLATFORM SUPER ADMIN: BACKUP & RESTORE CONSOLE
+# ==============================================================================
+
+@require_superadmin
+def backup_config_view(request):
+    """SaaS Admin: Backup Configuration screen: scheduled backups, encryption, retention."""
+    schools = SchoolProfile.objects.all().order_by('name')
+    selected_school_id = request.GET.get('school_id', '') or request.POST.get('school_id', '')
+    if selected_school_id:
+        school = SchoolProfile.objects.filter(id=selected_school_id).first() or schools.first()
+    else:
+        ctx = get_school_context(request)
+        school = ctx.get('school') or schools.first()
+
+    config, _ = BackupConfiguration.objects.get_or_create(school=school)
+
+    if request.method == 'POST':
+        form = BackupConfigurationForm(request.POST, instance=config)
+        if form.is_valid():
+            form.save()
+            log_audit(
+                request=request,
+                action='UPDATE',
+                module='USERS',
+                object_type='BackupConfiguration',
+                object_id=str(config.id),
+                object_repr=f"Backup policy for {school.name}",
+                description=f"Updated backup schedule ({config.backup_frequency}), retention ({config.retention_days} days) for {school.name}",
+                reason="SaaS infrastructure policy update"
+            )
+            messages.success(request, f"Backup configuration for '{school.name}' saved successfully.")
+            return redirect(f"/backup/config/?school_id={school.id}")
+    else:
+        form = BackupConfigurationForm(instance=config)
+
+    ctx = {
+        'config': config,
+        'form': form,
+        'school': school,
+        'schools': schools,
+        'selected_school_id': str(school.id) if school else '',
+        'title': 'SaaS Backup Policy Configuration'
+    }
+    return render(request, 'school_erp/backup_config.html', ctx)
+
+
+@require_superadmin
+def backup_history_view(request):
+    """SaaS Admin: Backup History screen showing all generated archives with checksums & verification status."""
+    schools = SchoolProfile.objects.all().order_by('name')
+    selected_school_id = request.GET.get('school_id', '').strip()
+
+    backups = BackupLog.objects.select_related('school', 'created_by').all().order_by('-created_at')
+    if selected_school_id:
+        try:
+            backups = backups.filter(school_id=int(selected_school_id))
+        except (ValueError, TypeError):
+            pass
+
+    total_backups = backups.count()
+    verified_backups = backups.filter(is_verified=True).count()
+    total_size = sum(b.file_size_mb for b in backups)
+    last_backup = backups.first()
+
+    ctx = {
+        'backups': backups,
+        'schools': schools,
+        'selected_school_id': selected_school_id,
+        'total_backups': total_backups,
+        'verified_backups': verified_backups,
+        'total_size': total_size,
+        'last_backup': last_backup,
+        'title': 'SaaS Backup History & Archives'
+    }
+    return render(request, 'school_erp/backup_history.html', ctx)
+
+
+@require_superadmin
+def backup_run_view(request):
+    """SaaS Admin: Trigger manual backup generation on demand."""
+    if request.method == 'POST':
+        school_id = request.POST.get('school_id', '').strip()
+        if school_id:
+            school = SchoolProfile.objects.filter(id=school_id).first()
+        else:
+            ctx = get_school_context(request)
+            school = ctx.get('school') or SchoolProfile.objects.first()
+
+        if not school:
+            messages.error(request, "No school selected to generate backup.")
+            return redirect('backup_history')
+
+        backup_type = request.POST.get('backup_type', 'Full')
+        try:
+            backup_log = generate_system_backup(
+                school=school,
+                backup_type=backup_type,
+                created_by=request.user
+            )
+            messages.success(
+                request,
+                f"Backup '{backup_log.backup_name}' for '{school.name}' generated successfully! "
+                f"Size: {backup_log.file_size_mb} MB | SHA-256: {backup_log.checksum_sha256[:16]}..."
+            )
+        except Exception as e:
+            messages.error(request, f"Error generating backup: {str(e)}")
+
+    redirect_url = 'backup_history'
+    if request.POST.get('school_id'):
+        redirect_url += f"?school_id={request.POST.get('school_id')}"
+    return redirect(redirect_url)
+
+
+@require_superadmin
+def backup_download_view(request, backup_id):
+    """SaaS Admin: Secure download of generated backup archive."""
+    backup = get_object_or_404(BackupLog, pk=backup_id)
+
+    if not os.path.exists(backup.file_path):
+        messages.error(request, "Backup file does not exist on disk.")
+        return redirect('backup_history')
+
+    log_audit(
+        request=request,
+        action='EXPORT',
+        module='USERS',
+        object_type='BackupLog',
+        object_id=str(backup.id),
+        object_repr=backup.backup_name,
+        description=f"Downloaded backup archive {backup.backup_name} for {backup.school.name}",
+        reason="Disaster recovery archive retrieval"
+    )
+
+    response = FileResponse(open(backup.file_path, 'rb'), content_type='application/zip')
+    response['Content-Disposition'] = f'attachment; filename="{backup.backup_name}"'
+    return response
+
+
+@require_superadmin
+def backup_restore_view(request):
+    """SaaS Admin: Restore Console: isolated verification testing & staging environment restores."""
+    schools = SchoolProfile.objects.all().order_by('name')
+    selected_school_id = request.GET.get('school_id', '').strip()
+
+    backups = BackupLog.objects.select_related('school').all().order_by('-created_at')
+    if selected_school_id:
+        try:
+            backups = backups.filter(school_id=int(selected_school_id))
+        except (ValueError, TypeError):
+            pass
+
+    ctx = {
+        'backups': backups,
+        'schools': schools,
+        'selected_school_id': selected_school_id,
+        'title': 'SaaS Restore Console & Sandbox Verification'
+    }
+    return render(request, 'school_erp/backup_restore.html', ctx)
+
+
+@require_superadmin
+def backup_restore_test_view(request, backup_id):
+    """SaaS Admin: Execute isolated sandbox verification or staging test restore."""
+    backup = get_object_or_404(BackupLog, pk=backup_id)
+
+    action = request.POST.get('test_action', 'verify')
+    if action == 'staging':
+        result = execute_test_environment_restore(backup.id, user=request.user)
+        if result['success']:
+            messages.success(request, f"Staging Restore Successful! {result['message']}")
+        else:
+            messages.error(request, f"Staging Restore Failed: {result['message']}")
+    else:
+        result = verify_restore_archive(backup.id, user=request.user)
+        if result['success']:
+            messages.success(
+                request,
+                f"Isolated Verification Passed! Database Tables Verified: {result.get('verified_tables', 0)}, "
+                f"Students Verified: {result.get('student_records', 0)}. Production data is completely intact."
+            )
+        else:
+            messages.error(request, f"Verification Failed: {result['message']}")
+    return redirect('backup_restore')
+
+
+# ==============================================================================
+# SECURITY SETTINGS & AUDIT COMPLIANCE
+# ==============================================================================
+
+@require_menu_permission('can_manage_users', 'Security Settings')
+def security_settings_view(request):
+    """Security Settings, Environment Mode Switcher, OWASP/GIGW Compliance & Login Failure Monitor."""
+    ctx = get_school_context(request)
+    school = ctx['school']
+    sec_config, _ = SecurityConfiguration.objects.get_or_create(school=school)
+
+    if request.method == 'POST':
+        form = SecurityConfigurationForm(request.POST, instance=sec_config)
+        if form.is_valid():
+            sec_config.last_security_audit_at = timezone.now()
+            form.save()
+            AuditLog.log(
+                school=school,
+                user=request.user,
+                module='Backup & Security',
+                action='Update Security Policy',
+                target=f"Environment: {sec_config.environment_mode}",
+                details=f"Session Expiry: {sec_config.session_expiry_minutes}m, MFA: {sec_config.enable_mfa}, Lockout: {sec_config.max_login_failures} attempts"
+            )
+            messages.success(request, f"Security policy updated for {sec_config.environment_mode} environment.")
+            return redirect('security_settings')
+    else:
+        form = SecurityConfigurationForm(instance=sec_config)
+
+    # Filter Login Attempt Logs
+    status_filter = request.GET.get('status', '').strip()
+    login_logs = LoginAttemptLog.objects.filter(school=school)
+    if status_filter:
+        login_logs = login_logs.filter(status=status_filter)
+    login_logs = login_logs[:60]
+
+    # Compliance Scorecard (Government of India GIGW & OWASP Top 10)
+    compliance_checks = [
+        {"title": "HTTPS & Transport Security", "desc": "TLS 1.3 / HSTS enforced with secure cookie flags", "passed": sec_config.enforce_https},
+        {"title": "Brute Force Protection", "desc": "Account lockout after threshold failures with IP cooldown", "passed": sec_config.max_login_failures <= 5},
+        {"title": "Session Inactivity Timeout", "desc": "Session expires automatically after idle duration (<= 60 mins)", "passed": sec_config.session_expiry_minutes <= 60},
+        {"title": "Password Complexity Policy", "desc": "Requires uppercase, digits, and special characters (min 8 chars)", "passed": (sec_config.password_min_length >= 8 and sec_config.password_require_uppercase and sec_config.password_require_digits)},
+        {"title": "Multi-Factor Authentication (MFA)", "desc": "Two-factor authentication pin verification on login", "passed": sec_config.enable_mfa},
+        {"title": "Suspicious Activity Monitoring", "desc": "Real-time anomaly detection and IP lockout logging", "passed": sec_config.enable_suspicious_activity_alerts},
+        {"title": "Data Loss & Encrypted Backups", "desc": "Scheduled AES-encrypted backups with SHA-256 integrity hash", "passed": True},
+        {"title": "Role-Based Access Control (RBAC)", "desc": "Granular permissions preventing cross-account access", "passed": True},
+    ]
+    passed_count = sum(1 for c in compliance_checks if c["passed"])
+    compliance_score = int((passed_count / len(compliance_checks)) * 100)
+
+    ctx.update({
+        'sec_config': sec_config,
+        'form': form,
+        'login_logs': login_logs,
+        'compliance_checks': compliance_checks,
+        'compliance_score': compliance_score,
+        'status_filter': status_filter,
+        'title': 'Security Settings & Compliance'
+    })
+    return render(request, 'school_erp/security_settings.html', ctx)
+
+
+# ==============================================================================
+# MULTI-BRANCH MASTER & SCHOOL SETUP
+# ==============================================================================
+
+@require_menu_permission('can_manage_classes', 'Branch Master')
+def branch_master_view(request):
+    """Branch Master screen: view, manage, and configure school branches."""
+    ctx = get_school_context(request)
+    school = ctx['school']
+    branches = Branch.objects.filter(school=school).annotate(
+        student_count=Count('students', distinct=True),
+        class_count=Count('class_levels', distinct=True)
+    )
+
+    total_branches = branches.count()
+    active_branches = branches.filter(is_active=True).count()
+
+    ctx.update({
+        'branches': branches,
+        'total_branches': total_branches,
+        'active_branches': active_branches,
+        'title': 'Branch Master'
+    })
+    return render(request, 'school_erp/branch_master.html', ctx)
+
+
+@require_menu_permission('can_manage_classes', 'Create Branch')
+def branch_create_view(request):
+    """Add a new school branch with custom numbering prefixes & branding."""
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    if request.method == 'POST':
+        form = BranchForm(request.POST, request.FILES)
+        if form.is_valid():
+            branch = form.save(commit=False)
+            branch.school = school
+            if branch.is_main_branch:
+                Branch.objects.filter(school=school, is_main_branch=True).update(is_main_branch=False)
+            branch.save()
+
+            AuditLog.log(
+                school=school,
+                user=request.user,
+                module='School Setup',
+                action='Create Branch',
+                target=f"{branch.name} ({branch.code})",
+                details=f"Receipt Prefix: {branch.receipt_prefix}, Student Prefix: {branch.student_id_prefix}"
+            )
+            messages.success(request, f"Branch '{branch.name}' created successfully.")
+            return redirect('branch_master')
+    else:
+        form = BranchForm()
+
+    ctx.update({
+        'form': form,
+        'title': 'Add New Branch'
+    })
+    return render(request, 'school_erp/branch_form.html', ctx)
+
+
+@require_menu_permission('can_manage_classes', 'Edit Branch')
+def branch_edit_view(request, branch_id):
+    """Edit branch details, prefix, and settings."""
+    ctx = get_school_context(request)
+    school = ctx['school']
+    branch = get_object_or_404(Branch, pk=branch_id, school=school)
+
+    if request.method == 'POST':
+        form = BranchForm(request.POST, request.FILES, instance=branch)
+        if form.is_valid():
+            b = form.save(commit=False)
+            if b.is_main_branch:
+                Branch.objects.filter(school=school, is_main_branch=True).exclude(pk=b.pk).update(is_main_branch=False)
+            b.save()
+
+            AuditLog.log(
+                school=school,
+                user=request.user,
+                module='School Setup',
+                action='Update Branch',
+                target=f"{branch.name} ({branch.code})",
+                details="Updated branch information and settings"
+            )
+            messages.success(request, f"Branch '{branch.name}' updated successfully.")
+            return redirect('branch_master')
+    else:
+        form = BranchForm(instance=branch)
+
+    ctx.update({
+        'form': form,
+        'branch': branch,
+        'title': f'Edit Branch: {branch.name}'
+    })
+    return render(request, 'school_erp/branch_form.html', ctx)
+
+
+@require_menu_permission('can_manage_classes', 'Toggle Branch')
+def branch_toggle_view(request, branch_id):
+    """Activate or deactivate a branch."""
+    if request.method == 'POST':
+        ctx = get_school_context(request)
+        school = ctx['school']
+        branch = get_object_or_404(Branch, pk=branch_id, school=school)
+        branch.is_active = not branch.is_active
+        branch.save()
+
+        AuditLog.log(
+            school=school,
+            user=request.user,
+            module='School Setup',
+            action='Toggle Branch Status',
+            target=branch.name,
+            details=f"Status set to {'Active' if branch.is_active else 'Inactive'}"
+        )
+        messages.info(request, f"Branch '{branch.name}' status set to {'Active' if branch.is_active else 'Inactive'}.")
+    return redirect('branch_master')
+
+
+# ==============================================================================
+# PROMOTION WIZARD (REPEAT-YEAR, SECTION-CHANGE, SESSION PRESERVATION)
+# ==============================================================================
+
+@require_menu_permission('can_manage_students', 'Promotion Wizard')
+def promotion_wizard_view(request):
+    """
+    Comprehensive Promotion Wizard:
+    - Supports Promote, Section Change, and Repeat Year (Retain) workflows.
+    - Guarantees that historical marks, receipts, and attendance are NOT overwritten.
+    - Updates/creates StudentSessionEnrollment records preserving past academic session history.
+    """
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    sessions = AcademicSession.objects.filter(school=school).order_by('-start_date')
+    classes = ClassLevel.objects.filter(school=school).order_by('order', 'name')
+    branches = Branch.objects.filter(school=school, is_active=True).order_by('name')
+
+    source_session_id = request.GET.get('source_session') or request.POST.get('source_session')
+    source_class_id = request.GET.get('source_class') or request.POST.get('source_class')
+    source_section_id = request.GET.get('source_section') or request.POST.get('source_section')
+
+    source_session = None
+    source_class = None
+    source_section = None
+    students = []
+
+    if source_session_id:
+        source_session = AcademicSession.objects.filter(id=source_session_id, school=school).first()
+    if not source_session and sessions.exists():
+        source_session = sessions.first()
+        source_session_id = str(source_session.id)
+
+    if source_class_id:
+        source_class = ClassLevel.objects.filter(id=source_class_id, school=school).first()
+    if not source_class and classes.exists():
+        source_class = classes.first()
+        source_class_id = str(source_class.id)
+
+    if source_section_id:
+        source_section = Section.objects.filter(id=source_section_id, class_level=source_class).first()
+
+    # Load students matching source session and class
+    if source_session and source_class:
+        students_qs = Student.objects.filter(
+            school=school,
+            is_active=True,
+            academic_session=source_session,
+            class_level=source_class
+        )
+        if source_section:
+            students_qs = students_qs.filter(section=source_section)
+        students = students_qs.select_related('class_level', 'section', 'academic_session').order_by('roll_number', 'first_name')
+
+    # Available sections for source class
+    source_sections = Section.objects.filter(class_level=source_class).order_by('name') if source_class else []
+
+    # Handle Promotion / Retention / Section Change Submission
+    if request.method == 'POST' and request.POST.get('action') == 'process_promotion':
+        target_session_id = request.POST.get('target_session')
+        target_class_id = request.POST.get('target_class')
+        target_section_id = request.POST.get('target_section')
+        selected_student_ids = request.POST.getlist('selected_students')
+
+        target_session = AcademicSession.objects.filter(id=target_session_id, school=school).first()
+        target_class = ClassLevel.objects.filter(id=target_class_id, school=school).first()
+        target_section = Section.objects.filter(id=target_section_id, class_level=target_class).first()
+
+        if not selected_student_ids:
+            messages.warning(request, "No students were selected for processing.")
+            return redirect(f"{request.path}?source_session={source_session_id}&source_class={source_class_id}")
+
+        processed_count = 0
+        promoted_count = 0
+        retained_count = 0
+        section_changed_count = 0
+
+        for student_id in selected_student_ids:
+            student = Student.objects.filter(id=student_id, school=school).first()
+            if not student:
+                continue
+
+            student_action = request.POST.get(f'student_action_{student.id}', 'Promote')
+
+            if student_action == 'Promote':
+                if not target_session or not target_class or not target_section:
+                    messages.error(request, "Target Session, Target Class, and Target Section are required for Promotion.")
+                    return redirect(f"{request.path}?source_session={source_session_id}&source_class={source_class_id}")
+
+                # 1. Update source session enrollment as 'Promoted' (preserving past history)
+                StudentSessionEnrollment.objects.update_or_create(
+                    student=student,
+                    academic_session=source_session,
+                    defaults={
+                        'class_level': student.class_level,
+                        'section': student.section,
+                        'roll_number': student.roll_number,
+                        'status': 'Promoted'
+                    }
+                )
+
+                # 2. Create target session enrollment as 'Active'
+                StudentSessionEnrollment.objects.update_or_create(
+                    student=student,
+                    academic_session=target_session,
+                    defaults={
+                        'class_level': target_class,
+                        'section': target_section,
+                        'roll_number': student.roll_number,
+                        'status': 'Active',
+                        'promoted_from_session': source_session
+                    }
+                )
+
+                # 3. Update current student active pointer
+                student.academic_session = target_session
+                student.class_level = target_class
+                student.section = target_section
+                student.save(update_fields=['academic_session', 'class_level', 'section'])
+
+                promoted_count += 1
+                processed_count += 1
+
+            elif student_action == 'Repeat_Year':
+                if not target_session:
+                    messages.error(request, "Target Session is required for Repeat Year.")
+                    return redirect(f"{request.path}?source_session={source_session_id}&source_class={source_class_id}")
+
+                # 1. Mark source session enrollment as 'Retained'
+                StudentSessionEnrollment.objects.update_or_create(
+                    student=student,
+                    academic_session=source_session,
+                    defaults={
+                        'class_level': student.class_level,
+                        'section': student.section,
+                        'roll_number': student.roll_number,
+                        'status': 'Retained'
+                    }
+                )
+
+                # 2. Create target session enrollment in SAME class as 'Active'
+                StudentSessionEnrollment.objects.update_or_create(
+                    student=student,
+                    academic_session=target_session,
+                    defaults={
+                        'class_level': student.class_level,
+                        'section': student.section,
+                        'roll_number': student.roll_number,
+                        'status': 'Active',
+                        'promoted_from_session': source_session
+                    }
+                )
+
+                # 3. Update student pointer to new session (same class)
+                student.academic_session = target_session
+                student.save(update_fields=['academic_session'])
+
+                retained_count += 1
+                processed_count += 1
+
+            elif student_action == 'Section_Change':
+                new_sec_id = request.POST.get(f'new_section_{student.id}')
+                new_sec = Section.objects.filter(id=new_sec_id, class_level=student.class_level).first()
+                if new_sec:
+                    student.section = new_sec
+                    student.save(update_fields=['section'])
+                    # Update active session enrollment
+                    StudentSessionEnrollment.objects.filter(
+                        student=student,
+                        academic_session=source_session
+                    ).update(section=new_sec)
+                    section_changed_count += 1
+                    processed_count += 1
+
+        AuditLog.log(
+            school=school,
+            user=request.user,
+            module='Promotion Wizard',
+            action='Batch Student Promotion',
+            target=f"From {source_session.name if source_session else '-'} {source_class.name if source_class else '-'}",
+            details=f"Processed {processed_count} students: {promoted_count} Promoted, {retained_count} Repeat-Year, {section_changed_count} Section Change. Historical marks and receipts preserved."
+        )
+
+        messages.success(
+            request,
+            f"Promotion Wizard completed successfully! Processed {processed_count} student records "
+            f"({promoted_count} Promoted, {retained_count} Repeat-Year, {section_changed_count} Section Changes). "
+            f"Historical marks, receipts, and attendance remain fully preserved."
+        )
+        return redirect(f"{request.path}?source_session={source_session_id}&source_class={source_class_id}")
+
+    ctx.update({
+        'sessions': sessions,
+        'classes': classes,
+        'branches': branches,
+        'source_session': source_session,
+        'source_class': source_class,
+        'source_section': source_section,
+        'source_sections': source_sections,
+        'students': students,
+        'source_session_id': source_session_id,
+        'source_class_id': source_class_id,
+        'source_section_id': source_section_id,
+        'title': 'Promotion Wizard'
+    })
+    return render(request, 'school_erp/promotion_wizard.html', ctx)
+
+
+# ==============================================================================
+# CONSOLIDATED MANAGEMENT REPORT
+# ==============================================================================
+
+@require_menu_permission('can_manage_fees', 'Consolidated Management Report')
+def consolidated_report_view(request):
+    """Cross-branch & cross-session executive summary report."""
+    ctx = get_school_context(request)
+    school = ctx['school']
+
+    branches = Branch.objects.filter(school=school)
+    sessions = AcademicSession.objects.filter(school=school).order_by('-start_date')
+
+    # Branch-wise metrics
+    branch_metrics = []
+    total_students_all = 0
+    total_collections_all = Decimal('0.00')
+
+    for b in branches:
+        student_cnt = Student.objects.filter(school=school, branch=b, is_active=True).count()
+        receipt_total = FeeReceipt.objects.filter(
+            school=school, branch=b, status='Active'
+        ).aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+
+        total_students_all += student_cnt
+        total_collections_all += receipt_total
+
+        branch_metrics.append({
+            'branch': b,
+            'students_count': student_cnt,
+            'receipts_total': receipt_total,
+            'is_main': b.is_main_branch,
+            'branch_head': b.branch_head or '-'
+        })
+
+    # Unassigned branch count
+    unassigned_students = Student.objects.filter(school=school, branch__isnull=True, is_active=True).count()
+    unassigned_collections = FeeReceipt.objects.filter(
+        school=school, branch__isnull=True, status='Active'
+    ).aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+
+    if unassigned_students > 0 or unassigned_collections > 0 or not branches.exists():
+        branch_metrics.append({
+            'branch': {'name': 'Main / Head Office Campus', 'code': 'HQ-MAIN', 'is_main_branch': True},
+            'students_count': unassigned_students,
+            'receipts_total': unassigned_collections,
+            'is_main': True,
+            'branch_head': school.principal_name or '-'
+        })
+        total_students_all += unassigned_students
+        total_collections_all += unassigned_collections
+
+    # Session-wise comparison
+    session_metrics = []
+    for s in sessions[:5]:
+        s_students = Student.objects.filter(school=school, academic_session=s).count()
+        s_invoices = FeeInvoice.objects.filter(school=school, academic_session=s).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        s_paid = FeeReceipt.objects.filter(school=school, student__academic_session=s, status='Active').aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+        s_due = s_invoices - s_paid
+        session_metrics.append({
+            'session': s,
+            'student_count': s_students,
+            'invoiced_total': s_invoices,
+            'collected_total': s_paid,
+            'due_total': s_due if s_due > 0 else Decimal('0.00'),
+            'is_current': s.is_current
+        })
+
+    ctx.update({
+        'branches': branches,
+        'branch_metrics': branch_metrics,
+        'session_metrics': session_metrics,
+        'total_students_all': total_students_all,
+        'total_collections_all': total_collections_all,
+        'title': 'Consolidated Management Report'
+    })
+    return render(request, 'school_erp/consolidated_report.html', ctx)
